@@ -26,7 +26,23 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
     await hass.async_add_executor_job(copy_html_files, hass)
     await hass.async_add_executor_job(copy_all_card_files, hass)
 
+    # Registra il percorso statico per la nuova card
+    _LOGGER.debug("Inizio registrazione della card hahigh-gauge-card...")
+    
+    try:
+        hass.http.register_static_path(
+            "/local/community/hahigh/hahigh-gauge-card.js",  # Percorso pubblico
+            hass.config.path("www/community/hahigh/hahigh-gauge-card/hahigh-gauge-card.js"),  # Percorso fisico
+        )
+        _LOGGER.info("Percorso statico registrato: /local/community/hahigh/hahigh-gauge-card.js")
+    except Exception as e:
+        _LOGGER.error("Errore nella registrazione del percorso statico della card: %s", e)
+    
+    
+        
     _LOGGER.info("HaHigh integration set up successfully.")
+
+    
 
     return True
 
