@@ -1,8 +1,7 @@
-class Hag5RendererCard extends HTMLElement {
+class HaHighGaugeCard extends HTMLElement {
     config;
     iframe;
-    currentFileName;
-    currentProgress;
+    currentSensorValue;
 
     // required
     setConfig(config) {
@@ -10,45 +9,52 @@ class Hag5RendererCard extends HTMLElement {
     }
 
     set hass(hass) {
-        const printingFileNameEntity = 'sensor.printing_file_name';
-        const printProgressEntity = 'sensor.print_progress';
+        const sensorEntity = this.config.entity;
 
-        const printingFileNameState = hass.states[printingFileNameEntity]?.state || 'unavailable';
-        const printProgressState = hass.states[printProgressEntity]?.state || '0';
-
-        // Aggiorna il file e la percentuale insieme ogni volta che cambia la percentuale
-        if (this.currentProgress !== printProgressState) {
-            this.currentFileName = printingFileNameState;
-            this.currentProgress = printProgressState;
-    
-            // Invia il nome del file e la percentuale insieme
-            this.updateIframe({ fileName: this.currentFileName, progress: this.currentProgress });
+        if (!sensorEntity) {
+            console.error("No entity defined in the card configuration.");
+            return;
         }
-        
 
-        // Crea il contenuto della card solo se non esiste
+        const sensorState = hass.states[sensorEntity]?.state || 'unavailable';
+
+        // Update the sensor value only if it has changed
+        if (this.currentSensorValue !== sensorState) {
+            this.currentSensorValue = sensorState;
+            this.updateIframe({ sensorValue: this.currentSensorValue });
+        }
+
+        // Create the card content if it doesn't exist
         if (!this.iframe) {
+            const title = this.config.title || 'Gauge';
+            const x = this.config.x || '50';
+            const y = this.config.y || '50';
+            const max = this.config.max || '100';
+            const unit = this.config.unit || '';
+            const size = this.config.zoom || '100';
+
             this.innerHTML = `
-                <ha-card header="3D Print Renderer">
+                <ha-card header="Gauge Sensor">
                     <div class="card-content">
-                        <iframe id="renderer-iframe" src="/local/community/haghost5/hag5_visualizer.html" style="width: 100%; height: 400px; border: none;"></iframe>
+                        <iframe id="gauge-iframe" 
+                                src="/local/community/hahigh/hahigh-gauge-card/hahigh-gauge.html?t=${title}&x=${x}&y=${y}&m=${max}&u=${unit}&z=${size}" 
+                                style="width: 100%; height: 400px; border: none;"></iframe>
                     </div>
                 </ha-card>
             `;
-            this.iframe = this.querySelector('#renderer-iframe');
-            
-            // Forza un aggiornamento iniziale
-            this.updateIframe({ fileName: this.currentFileName, progress: this.currentProgress });
+            this.iframe = this.querySelector('#gauge-iframe');
 
+            // Force an initial update
+            this.updateIframe({ sensorValue: this.currentSensorValue });
         }
     }
 
-    // Funzione per inviare messaggi all'iframe
+    // Function to send messages to the iframe
     updateIframe(data) {
-        const retryInterval = 500; // Millisecondi
+        const retryInterval = 500; // Milliseconds
         const maxRetries = 10;
         let retries = 0;
-    
+
         const sendMessage = () => {
             if (this.iframe && this.iframe.contentWindow) {
                 console.log('Sending message to iframe:', data);
@@ -61,9 +67,9 @@ class Hag5RendererCard extends HTMLElement {
                 console.error('Failed to send message to iframe after retries:', data);
             }
         };
-    
+
         sendMessage();
     }
 }
 
-customElements.define('hag5-renderer-card', Hag5RendererCard);
+customElements.define('hahigh-gauge-card', HaHighGaugeCard);
