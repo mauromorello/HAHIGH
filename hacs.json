@@ -1,12 +1,10 @@
 {
-    "name": "HaHigh - Highcharts for Home Assistant",
-    "content_in_root": false,
-    "zip_release": false,
-    "filename": null,
-    "hide_default_branch": false,
-    "homeassistant": "2024.1",
-    "hacs": "1.6.0",
-    "domains": ["sensor", "binary_sensor"],
-    "country": null,
-    "persistent_directory": null
+  "name": "HAHigh",
+  "content_in_root": false,
+  "domains": ["hahigh"],
+  "country": "IT",
+  "homeassistant": "2023.1.0",
+  "render_readme": true,
+  "zip_release": false,
+  "filename": ""
 }
