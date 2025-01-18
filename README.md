@@ -58,54 +58,55 @@ After adding it as a resource, open the **Lovelace UI** → **Overview** → **E
 ### Single-Query Example
 
 ```yaml
-type: custom:timeseries-highinflux-card
-title: "InfluxDB Chart Example"
-influx_url: "http://your_influxdb_host:8086"
-influx_db: "example_db"
-influx_user: "example_user"
-influx_password: "example_pass"
-chart_type: "line"
-chart_height: "300px"
-max_y: 100
-update_interval: 60000
-legend: true
-influx_query: >
-  SELECT mean("value")
-  FROM "°C"
-  WHERE ("entity_id" = 'my_temperature_entity_id')
-  AND time > now() - 120d
-  GROUP BY time(1d) fill(null)
+   type: custom:timeseries-highinflux-card
+   title: "InfluxDB Chart Example"
+   influx_url: "http://your_influxdb_host:8086"
+   influx_db: "example_db"
+   influx_user: "example_user"
+   influx_password: "example_pass"
+   chart_type: "line"
+   chart_height: "300px"
+   max_y: 100
+   update_interval: 60000
+   legend: true
+   influx_query: >
+     SELECT mean("value")
+     FROM "°C"
+     WHERE ("entity_id" = 'my_temperature_entity_id')
+     AND time > now() - 120d
+     GROUP BY time(1d) fill(null)
 
 ### Multiple-Entities Example
 
 ```yaml
-type: custom:timeseries-highinflux-card
-title: "Multiple Series Chart"
-influx_url: "http://your_influxdb_host:8086"
-influx_db: "example_db"
-influx_user: "example_user"
-influx_password: "example_pass"
-chart_type: "areaspline"
-chart_height: "300px"
-legend: true
-update_interval: 120000
-entities:
-  - name: Temperature
-    query: >
-      SELECT mean("value")
-      FROM "°C"
-      WHERE ("entity_id" = 'temp_sensor')
-      AND time > now() - 90d
-      GROUP BY time(1d) fill(null)
-    unita_misura: "°C"
+   type: custom:timeseries-highinflux-card
+   title: "Multiple Series Chart"
+   influx_url: "http://your_influxdb_host:8086"
+   influx_db: "example_db"
+   influx_user: "example_user"
+   influx_password: "example_pass"
+   chart_type: "areaspline"
+   chart_height: "300px"
+   legend: true
+   update_interval: 120000
+   entities:
+     - name: Temperature
+       query: >
+         SELECT mean("value")
+         FROM "°C"
+         WHERE ("entity_id" = 'temp_sensor')
+         AND time > now() - 90d
+         GROUP BY time(1d) fill(null)
+       unita_misura: "°C"
+     - name: Humidity
+       query: >
+         SELECT mean("value")
+         FROM "%" WHERE ("entity_id" = 'humi_sensor')
+         AND time > now() - 90d
+         GROUP BY time(1d) fill(null)
+       unita_misura: "%"
 
-  - name: Humidity
-    query: >
-      SELECT mean("value")
-      FROM "%" WHERE ("entity_id" = 'humi_sensor')
-      AND time > now() - 90d
-      GROUP BY time(1d) fill(null)
-    unita_misura: "%"
+---
 
 In these configurations:
 
