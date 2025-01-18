@@ -57,7 +57,7 @@ After adding it as a resource, open the **Lovelace UI** → **Overview** → **E
 
 ### Single-Query Example
 
-```yaml
+```
    type: custom:timeseries-highinflux-card
    title: "InfluxDB Chart Example"
    influx_url: "http://your_influxdb_host:8086"
@@ -75,10 +75,11 @@ After adding it as a resource, open the **Lovelace UI** → **Overview** → **E
      WHERE ("entity_id" = 'my_temperature_entity_id')
      AND time > now() - 120d
      GROUP BY time(1d) fill(null)
+```
 
-### Multiple-Entities Example
+### Multiple entity example
 
-```yaml
+```
    type: custom:timeseries-highinflux-card
    title: "Multiple Series Chart"
    influx_url: "http://your_influxdb_host:8086"
@@ -105,8 +106,7 @@ After adding it as a resource, open the **Lovelace UI** → **Overview** → **E
          AND time > now() - 90d
          GROUP BY time(1d) fill(null)
        unita_misura: "%"
-
----
+```
 
 In these configurations:
 
