@@ -2,6 +2,14 @@
 
 Welcome to **[HAHIGH](https://github.com/mauromorello/HAHIGH)**! This project integrates the powerful [Highcharts](https://www.highcharts.com/) library into [Home Assistant](https://www.home-assistant.io/), enabling you to display beautiful timeseries charts sourced from your [InfluxDB](https://www.influxdata.com/) database.
 
+<img src="https://github.com/user-attachments/assets/7c474926-b53f-4116-8d6d-7d637bd28d05" style="width:600px;">
+<img src="https://github.com/user-attachments/assets/611f29bf-e261-47f5-a7e2-59f4a119d924" style="width:400px;">
+<img src="https://github.com/user-attachments/assets/1c6d9ff2-d86b-4f79-92cb-843e11388f74" style="width:400px;">
+<img src="https://github.com/user-attachments/assets/861fc8b5-001b-47c1-a5d9-525fde1efe48" style="width:600px;">
+
+
+
+
 ---
 
 ## License Notice for Highcharts
