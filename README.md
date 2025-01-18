@@ -20,7 +20,11 @@ The custom card in this repository is named **`timeseries-highinflux-card`**, an
 2. The **barebones custom card gist** from [@thomasloven](https://github.com/thomasloven):  
    [https://gist.github.com/thomasloven/1de8c62d691e754f95b023105fe4b74b](https://gist.github.com/thomasloven/1de8c62d691e754f95b023105fe4b74b)
 
-> **Important Note:** Highcharts supports hundreds of configuration parameters. This card only exposes a core subset of them. If you need more advanced customizations, you may need to modify the source or incorporate additional Highcharts options manually.
+> **Important Note:**
+>
+> - Highcharts supports hundreds of configuration parameters. This card only exposes a core subset of them. If you need more advanced customizations, you may need to modify the source or incorporate additional Highcharts options manually.
+> - This is a private attempt to porting highcharts in HA. If future version of both HA, Influx or Highcharts will have disrupting update, this may not work anymore.
+> - This repository is not intendet to be maintained, just a placeholder. Feel free to copy or use as toilet paper.
 
 ---
 
