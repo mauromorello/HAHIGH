@@ -1,0 +1,195 @@
+<html>
+
+<head>
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    <script src="https://code.highcharts.com/highcharts-more.js"></script>
+    <script src="https://code.highcharts.com/modules/solid-gauge.js"></script>
+    <style>
+        body { margin: 0;  }
+        .highcharts-figure { width: 100%; margin: 0 auto; }
+        #container { width: 100%; margin: 0 auto; height: 100% !important; }
+        .adattivo { font-size: clamp(16px, 8vw, 48px); }
+        .adattivo_mis { font-size: clamp(12px, 8vw, 18px); opacity:0.4; }
+        .adattivo_title { font-size: clamp(12px, 6vw, 24px); opacity:0.8; font-weight: 400; }
+    </style>
+</head>
+
+<body>
+    <figure class="highcharts-figure">
+        <div id="container"></div>
+    </figure>
+    <script>
+        // Ottieni i parametri dalla query string
+        const urlParams = new URLSearchParams(window.location.search);
+        
+        // Ricava i valori dei parametri
+        const chartParams = {
+            sensor: urlParams.get('sensor') || "sensor.default_sensor", // Default se non specificato
+            max: parseFloat(urlParams.get('max')) || 1000, // Default massimo
+            title: urlParams.get('title') || "Default Title", // Default titolo
+            container: "container", // ID del contenitore, fisso
+            umisura: urlParams.get('umisura') || "w",
+            update: urlParams.get('update') * 1000 || 2000,
+            size: urlParams.get('size')  || 150
+        };
+        
+        // Controlla se il sensore è valido
+        if (!chartParams.sensor || chartParams.sensor.trim() === "") {
+            console.error("Parametro 'sensor' mancante o non valido.");
+        }
+        
+        // Configurazione base del grafico
+        const gaugeOptions = {
+            chart: {
+                type: 'solidgauge',
+                margin: [0, 0, 5, 0], // TOP LEFT BOTTOM RIGHT
+                spacing: [0, 0, 0, 0],
+            },
+            title: {
+                useHTML: true,
+                text: '<span class="adattivo_title">' + chartParams.title + "</span>", // Usa il titolo dinamico
+                align: "left",
+                x: 10,
+                y: 25
+            },
+            pane: {
+                center: ['50%', '86%'],
+                size: chartParams.size + "%",
+                startAngle: -90,
+                endAngle: 90,
+                background: {
+                    backgroundColor: {
+                        linearGradient: {
+                            x1: 1,
+                            x2: 0,
+                            y1: 1,
+                            y2: 0
+                        },
+                        stops: [
+                            [0, '#DFDFDF'],
+                            [1, '#FDFDFD']
+                        ]
+                    },
+                    borderRadius: 5,
+                    innerRadius: '60%',
+                    outerRadius: '100%',
+                    shape: 'arc'
+                }
+            },
+            tooltip: {
+                enabled: false
+            },
+            yAxis: {
+                stops: [
+                    [0.1, '#55BF3B'], // green
+                    [0.5, '#DDDF0D'], // yellow
+                    [0.9, '#DF5353'] // red
+                ],
+                lineWidth: 0,
+                tickWidth: 0,
+                minorTickInterval: null,
+                tickAmount: 2,
+                labels: {
+                    y: 15,
+                }
+            },
+            plotOptions: {
+                solidgauge: {
+                    borderRadius: 3,
+                    dataLabels: {
+                        y: 0,
+                        borderWidth: 0,
+                        useHTML: true
+                    }
+                }
+            }
+        };
+        
+        // Creazione del grafico con i parametri dinamici
+        const chartSpeed = Highcharts.chart(
+            chartParams.container, // Usa il contenitore configurabile
+            Highcharts.merge(gaugeOptions, {
+                yAxis: {
+                    min: 0,
+                    max: chartParams.max // Usa il valore massimo dinamico
+                },
+                credits: {
+                    enabled: false
+                },
+                series: [{
+                    name: 'Serie',
+                    data: [0],
+                    dataLabels: {
+                        y: 0,
+                        format:
+                            '<div style="text-align:center">' +
+                            '<span class="adattivo">{y}</span>&nbsp;' +
+                            '<span class="adattivo_mis">' + chartParams.umisura + '</span>' +
+                            '</div>'
+                    }
+                }]
+            })
+        );
+        
+        // Funzione per aggiornare il grafico con i dati di Home Assistant
+        function fetchAndUpdate() {
+            if (!chartParams.sensor || chartParams.sensor.trim() === "") {
+                console.error("Parametro 'sensor' mancante o non valido.");
+                return;
+            }
+        
+            let point;
+        
+            if (chartSpeed) {
+                point = chartSpeed.series[0].points[0];
+        
+                var request = new XMLHttpRequest();
+                request.open('GET', `${document.location.origin}/api/states/${chartParams.sensor}`, true);
+        
+                request.onload = function () {
+                    if (request.status >= 200 && request.status < 400) {
+                        try {
+                            var data = JSON.parse(this.response);
+                            console.log(data);
+                            console.log('State:', data.state);
+        
+                            const newVal = Math.round(parseFloat(data.state));
+                            if (!isNaN(newVal)) {
+                                point.update(newVal);
+                            } else {
+                                console.warn('Valore non valido:', data.state);
+                            }
+        
+                            setTimeout(fetchAndUpdate, chartParams.update);
+                        } catch (error) {
+                            console.error('Errore nel parsing dei dati:', error);
+                            setTimeout(fetchAndUpdate, chartParams.update);
+                        }
+                    } else {
+                        console.error('Errore nella richiesta HTTP:', request.status);
+                        setTimeout(fetchAndUpdate, chartParams.update);
+                    }
+                };
+        
+                request.onerror = function () {
+                    console.error('Errore di connessione con il server.');
+                    setTimeout(fetchAndUpdate, chartParams.update);
+                };
+        
+                request.setRequestHeader(
+                    'Authorization',
+                    'Bearer YOUR-HA-API-TOKEN'
+                );
+        
+                request.send();
+            } else {
+                setTimeout(fetchAndUpdate, chartParams.update);
+            }
+        }
+        
+        // Avvia il ciclo
+        fetchAndUpdate();
+    </script>
+
+</HTML>
+</body>
