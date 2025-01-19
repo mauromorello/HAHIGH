@@ -1,4 +1,4 @@
-# TIMESERIES CARD: visualize long term data with highcharts
+# TIMESERIES CARD: visualize long term data with highcharts and CUSTOM CARD integration within HOME ASSISTANT
 
 Welcome to **[HAHIGH](https://github.com/mauromorello/HAHIGH)**! This project integrates the powerful [Highcharts](https://www.highcharts.com/) library into [Home Assistant](https://www.home-assistant.io/), enabling you to display beautiful timeseries charts sourced from your [InfluxDB](https://www.influxdata.com/) database.
 
