@@ -1,0 +1,195 @@
+<html>
+
+<head>
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    <script src="https://code.highcharts.com/highcharts-more.js"></script>
+    <style>
+        body {
+            margin: 0;
+        }
+        
+        .highcharts-figure {
+            width: 100%;
+            margin: 0 auto;
+        }
+        
+        #container {
+            width: 100%;
+            margin: 0 auto;
+            height: 100% !important;
+        }
+        
+        .adattivo {
+            font-size: clamp(16px, 8vw, 48px);
+        }
+        .adattivo_mis {
+            font-size: clamp(12px, 8vw, 18px);
+            opacity:0.4;
+        }
+        .adattivo_title {
+            font-size: clamp(12px, 6vw, 22px);
+            margin-bottom:15px;
+            opacity:0.8;
+            font-weight: 400;
+        }
+    </style>
+</head>
+
+<body>
+    <figure class="highcharts-figure">
+        <div id="container"></div>
+
+    </figure>
+    <script>
+// Ottieni i parametri dalla query string
+const urlParams = new URLSearchParams(window.location.search);
+
+// Parametri del grafico
+const chartParams = {
+    sensor: urlParams.get('sensor') || "sensor.default_sensor",
+    //max: parseFloat(urlParams.get('max')) || 1000,
+    title: urlParams.get('title') || "",
+    container: "container",
+    umisura: urlParams.get('umisura') || "w",
+    update: (parseFloat(urlParams.get('update')) || 2) * 1000,
+    history: parseFloat(urlParams.get('history')) || 60
+};
+
+if (!chartParams.sensor) {
+    console.error("Parametro 'sensor' mancante o non valido.");
+}
+
+// Riferimento al grafico
+let chartSpeed;
+
+// Funzione per creare il grafico
+function createChart() {
+    chartSpeed = Highcharts.chart(chartParams.container, {
+        chart: {
+            type: 'areaspline',
+            events: {
+                load: function () {
+                    fetchAndUpdate(); // Avvia l'aggiornamento dopo il caricamento del grafico
+                }
+            }
+        },
+        plotOptions: {
+            areaspline: {
+                    color: '#32CD32',
+                    fillColor: {
+                        linearGradient: { x1: 0, x2: 0, y1: 0, y2: 1 },
+                        stops: [
+                            [0, '#32CD32'],
+                            [1, '#32CD3200']
+                        ]
+                    },
+                    threshold: null,
+                    marker: {
+                        lineWidth: 1,
+                        lineColor: null,
+                        fillColor: 'white'
+                    }
+            }
+        },
+        time: {
+            useUTC: false
+        },
+        title: {
+            align: 'left',
+            x:10,
+            y:15,
+            text: '<span class="adattivo_title">' + chartParams.title + '</span>',
+            useHTML: true
+        },
+        credits: {
+            enabled: false
+        },
+        xAxis: {
+            type: 'datetime',
+            tickPixelInterval: 150,
+        },
+        yAxis: {
+            title: {
+                text: chartParams.umisura
+            },
+            //max: chartParams.max
+        },
+        tooltip: {
+            headerFormat: '<b>{series.name}</b><br/>',
+            pointFormat: '{point.x:%Y-%m-%d %H:%M:%S}<br/>{point.y:.2f}'
+        },
+        legend: {
+            enabled: false
+        },
+        exporting: {
+            enabled: false
+        },
+        series: [{
+            name: chartParams.sensor,
+            data: generateInitialData()
+        }]
+    });
+}
+
+// Funzione per generare i dati iniziali
+function generateInitialData() {
+    const data = [];
+    const time = new Date().getTime();
+
+    for (let i = -chartParams.history; i <= 0; i++) {
+        data.push({
+            x: time + i * 1000,
+            y: Math.random()
+        });
+    }
+
+    return data;
+}
+
+// Funzione per aggiornare il grafico con i dati del sensore
+function fetchAndUpdate() {
+    if (!chartParams.sensor) {
+        console.error("Parametro 'sensor' mancante o non valido.");
+        return;
+    }
+
+    const request = new XMLHttpRequest();
+    request.open('GET', `${document.location.origin}/api/states/${chartParams.sensor}`, true);
+
+    request.onload = function () {
+        if (request.status >= 200 && request.status < 400) {
+            try {
+                const data = JSON.parse(this.response);
+                const newVal = parseFloat(data.state);
+                if (!isNaN(newVal)) {
+                    const x = new Date().getTime();
+                    chartSpeed.series[0].addPoint([x, newVal], true, true);
+                } else {
+                    console.warn('Valore non valido:', data.state);
+                }
+            } catch (error) {
+                console.error('Errore nel parsing dei dati:', error);
+            }
+        } else {
+            console.error('Errore nella richiesta HTTP:', request.status);
+        }
+
+        setTimeout(fetchAndUpdate, chartParams.update);
+    };
+
+    request.onerror = function () {
+        console.error('Errore di connessione con il server.');
+        setTimeout(fetchAndUpdate, chartParams.update);
+    };
+
+    request.setRequestHeader('Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI4OGYwMDk1NmNkOTY0NmY4OWRlN2VlODg4YjJkNTZjZSIsImlhdCI6MTczNjc3NjQ3NCwiZXhwIjoyMDUyMTM2NDc0fQ.f7iVJkF42WQzEctMtwRSClZaFwsIBZa3Aq6WVp7NZKY');
+    request.send();
+}
+
+// Crea il grafico
+createChart();
+
+    </script>
+
+</HTML>
+</body>
