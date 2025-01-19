@@ -16,10 +16,10 @@ Future versions of these dependencies may impact functionality.
 ## Avaiable tools:
 
 **TIMESERIES CARD**: a card easy to integrate connecting to influxdb, multiple series, basic configuration
-![temperature_2](https://github.com/user-attachments/assets/d9015be3-e147-487c-9f5e-a49e09bf1420)
+<img src="https://github.com/user-attachments/assets/d9015be3-e147-487c-9f5e-a49e09bf1420" style="width:200px;">
 
 **SOLIDGAUGE WEB**: a html page that can be putted inside HA iframe (web card) with some configuration passed by parameter. Realtime data from your sensors.
-![Immagine 2025-01-19 134758](https://github.com/user-attachments/assets/a2c05116-df11-4fc5-80ed-a0ae0dbb260b)
+<img src="https://github.com/user-attachments/assets/a2c05116-df11-4fc5-80ed-a0ae0dbb260b" style="width:200px;">
 
 
 ## License Considerations
