@@ -67,29 +67,6 @@ After adding it as a resource, open the **Lovelace UI** → **Overview** → **E
 
 ## Example Configuration
 
-### Single-Query Example
-
-```
-   type: custom:timeseries-highinflux-card
-   title: "InfluxDB Chart Example"
-   influx_url: "http://your_influxdb_host:8086"
-   influx_db: "example_db"
-   influx_user: "example_user"
-   influx_password: "example_pass"
-   chart_type: "line"
-   chart_height: "300px"
-   max_y: 100
-   update_interval: 60000
-   legend: true
-   influx_query: >
-     SELECT mean("value")
-     FROM "°C"
-     WHERE ("entity_id" = 'my_temperature_entity_id')
-     AND time > now() - 120d
-     GROUP BY time(1d) fill(null)
-```
-
-### Multiple entity example
 
 ```
    type: custom:timeseries-highinflux-card
