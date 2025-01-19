@@ -2,10 +2,10 @@
 
 Welcome to **[HAHIGH](https://github.com/mauromorello/HAHIGH)**! This project integrates the powerful [Highcharts](https://www.highcharts.com/) library into [Home Assistant](https://www.home-assistant.io/), enabling you to display beautiful timeseries charts sourced from your [InfluxDB](https://www.influxdata.com/) database.
 
-<img src="https://github.com/user-attachments/assets/7c474926-b53f-4116-8d6d-7d637bd28d05" style="width:600px;">
+<img src="https://github.com/user-attachments/assets/7c474926-b53f-4116-8d6d-7d637bd28d05" style="width:400px;">
 <img src="https://github.com/user-attachments/assets/611f29bf-e261-47f5-a7e2-59f4a119d924" style="width:400px;">
 <img src="https://github.com/user-attachments/assets/1c6d9ff2-d86b-4f79-92cb-843e11388f74" style="width:400px;">
-<img src="https://github.com/user-attachments/assets/861fc8b5-001b-47c1-a5d9-525fde1efe48" style="width:600px;">
+<img src="https://github.com/user-attachments/assets/861fc8b5-001b-47c1-a5d9-525fde1efe48" style="width:400px;">
 
 
 
@@ -106,6 +106,7 @@ After adding it as a resource, open the **Lovelace UI** → **Overview** → **E
    update_interval: 120000
    entities:
      - name: Temperature
+       color: #F44
        query: >
          SELECT mean("value")
          FROM "°C"
@@ -114,6 +115,7 @@ After adding it as a resource, open the **Lovelace UI** → **Overview** → **E
          GROUP BY time(1d) fill(null)
        unita_misura: "°C"
      - name: Humidity
+       color: #FF4
        query: >
          SELECT mean("value")
          FROM "%" WHERE ("entity_id" = 'humi_sensor')
@@ -129,7 +131,25 @@ In these configurations:
 - `chart_height`: The CSS height for the chart container (e.g., `300px`).  
 - `update_interval`: How often (in milliseconds) the card refreshes data from InfluxDB.  
 - `legend`: Set to `true` to display the series legend.  
-- `entities`: An array of objects, each containing a `query`, a `name`, and an optional `unita_misura` for the y-axis tooltip suffix.
+- `entities`: An array of objects, each containing a
+   - `query`, INFLUX query fetching your data
+   - a `name`, Name of the series
+   - a optionel `color`, see below.
+   - and an optional `unita_misura` for the y-axis tooltip suffix.
+ 
+#### Series Color Configuration
+
+Each series in the chart can have a custom color defined using the `color` property. If the `color` field is left empty, Highcharts will use its default color palette.
+
+You can specify the color in one of the following formats:
+
+- **3-digit hexadecimal color**: `#FFF` (each digit ranges from 0 to F)
+- **6-digit hexadecimal color**: `#FFFFFF` (each pair of digits ranges from 00 to FF)
+- **RGB format**: `rgb(255,255,255)` (values range from 0 to 255)
+- **RGBA format**: `rgba(255,255,255,1)` (values range from 0 to 255, with an alpha channel from 0 to 1)
+
+If the `color` property is left empty, Highcharts will automatically assign a default color palette to the charts.
+
 
 
 
