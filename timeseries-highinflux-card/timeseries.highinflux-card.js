@@ -47,7 +47,7 @@ class TimeseriesHighInfluxCard extends LitElement {
       influx_db: "mydb",
       influx_user: "admin",
       influx_password: "password",
-      influx_query: "SELECT time, value FROM some_measurement WHERE time > now() - 6h"
+      influx_query: "SELECT mean(\"value\") FROM \"°C\" WHERE (\"entity_id\" = 'temperature_sensor') AND time > now() - 120d GROUP BY time(1d) fill(null)"
     };
   }
 
@@ -199,6 +199,7 @@ class TimeseriesHighInfluxCard extends LitElement {
         // Build the array of series for Highcharts
         const chartSeries = allSeriesData.map((dataObj, i) => ({
           name: config.entities[i].name || null,
+          color: config.entities[i].color || null,
           data: dataObj.parsedData,
           tooltip: {
             valueSuffix: config.entities[i].unita_misura
@@ -435,7 +436,7 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
     if (!this._config) return;
     const newEntities = [...(this._config.entities || [])];
     // Example of a "blank" entity
-    newEntities.push({ name: "", query: "", unita_misura: "" });
+    newEntities.push({ name: "", color: "", query: "", unita_misura: "" });
 
     const newConfig = { ...this._config, entities: newEntities };
     this._config = newConfig;
@@ -531,16 +532,26 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
           !this._config.influx_query
             ? html``
             : html`
-                <div class="section">
-                  <label>Single Influx Query</label>
-                  <textarea
-                    rows="3"
-                    data-field="influx_query"
-                    @input=${this._valueChanged}
-                  >
-                  ${this._config.influx_query || ""}
-                  </textarea>
-                </div>
+                    <div class="section">
+                      <label>Single Influx Query</label>
+                      <label class="mdc-text-field mdc-text-field--outlined mdc-text-field--textarea">
+                        <span class="mdc-notched-outline">
+                          <span class="mdc-notched-outline__leading"></span>
+                          <span class="mdc-notched-outline__trailing"></span>
+                        </span>
+                        <span class="mdc-text-field__resizer">
+                          <textarea
+                            class="mdc-text-field__input"
+                            rows="8"
+                            cols="40"
+                            style="width:100% !important; max-width: 100% !important;"
+                            aria-label="Single Influx Query"
+                            data-field="influx_query"
+                            @input=${this._valueChanged}
+                          >${this._config.influx_query || ""}</textarea>
+                        </span>
+                      </label>
+                    </div>
               `
         }
 
@@ -578,10 +589,12 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
         </div>
 
         <!-- Multiple entities configuration -->
+        
         <div class="entities section">
           <h4>Entities (multiple series on the chart)</h4>
           ${this._config.entities.map((ent, index) => html`
             <div class="entity">
+              
               <ha-textfield
                 label="Entity Name"
                 .value=${ent.name || ""}
@@ -589,16 +602,34 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
                 data-index=${index}
                 @input=${this._entityValueChanged}
               ></ha-textfield>
-
-              <label>Influx Query</label>
-              <textarea
-                rows="3"
-                data-field="query"
+              
+              <ha-textfield
+                label="Color"
+                .value=${ent.color || ""}
+                data-field="color"
                 data-index=${index}
                 @input=${this._entityValueChanged}
-              >
-              ${ent.query || ""}
-              </textarea>
+              ></ha-textfield>
+
+                <label class="mdc-text-field mdc-text-field--outlined mdc-text-field--textarea">
+                  <span class="mdc-notched-outline">
+                    <span class="mdc-notched-outline__leading"></span>
+                    <span class="mdc-floating-label">Influx Query</span>
+                    <span class="mdc-notched-outline__trailing"></span>
+                  </span>
+                  <span class="mdc-text-field__resizer">
+                    <textarea
+                      class="mdc-text-field__input"
+                      rows="8"
+                      cols="40"
+                      style="width:100% !important;"
+                      aria-label="Influx Query"
+                      data-field="query"
+                      data-index=${index}
+                      @input=${this._entityValueChanged}
+                    >${ent.query || "Put here your query"}</textarea>
+                  </span>
+                </label>
 
               <ha-textfield
                 label="Unit of measure"
