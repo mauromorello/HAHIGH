@@ -1,0 +1,109 @@
+<html>
+<head>
+    <!--<script src="https://code.highcharts.com/11.4.7/highcharts.js"></script>-->
+    <script src="https://code.highcharts.com/stock/highstock.js"></script>
+    <style>
+        body {
+            margin: 0;
+        }
+        
+        #container {
+            margin: 0 auto;
+            width: 100%;
+            height: 100%;
+        }
+        
+    </style>
+</head>
+<body>
+    <div id="container" style="width:100%; height: 100%;"></div>
+    <script>
+        async function fetchPzemPowerData() {
+            const username = 'highcharts';
+            const password = 'highcharts';
+
+            // Query adattata
+            const query = `
+                SELECT mean("value")
+                FROM "W"
+                WHERE "entity_id" = 'pzem_power' AND time > now() - 90d
+                GROUP BY time(1d) fill(null)
+            `;
+
+            const url = `http://mimmoz.ns0.it:9994/query?u=${encodeURIComponent(username)}&p=${encodeURIComponent(password)}&db=homeassistant&q=${encodeURIComponent(query)}`;
+
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                const highchartsData = data.results[0].series
+                    ? data.results[0].series[0].values.map(
+                          ([time, value]) => [new Date(time).getTime(), parseFloat(value)]
+                      )
+                    : [];
+
+                if (highchartsData.length > 0) {
+                    renderChart(highchartsData);
+                } else {
+                }
+            } catch (error) {
+            }
+        }
+
+        const chart = null;
+        
+        function renderChart(data) {
+            Highcharts.stockChart('container', {
+                rangeSelector: {
+                    selected: 1
+                },
+        
+                title: {
+                    text: null
+                },
+        
+                series: [{
+                    name: 'Casa',
+                    data: data,
+                    type: 'areaspline',
+                    threshold: null,
+                    gapSize: 1,
+                    tooltip: {
+                        valueDecimals: 1,
+                        valueSuffix: ' W'
+                    },
+                    fillColor: {
+                        linearGradient: {
+                            x1: 0,
+                            y1: 0,
+                            x2: 0,
+                            y2: 1
+                        },
+                        stops: [
+                            [0, Highcharts.getOptions().colors[0]],
+                            [
+                                1,
+                                Highcharts.color(
+                                    Highcharts.getOptions().colors[0]
+                                ).setOpacity(0).get('rgba')
+                            ]
+                        ]
+                    }
+                }]
+            });
+
+            
+        }
+        
+        fetchPzemPowerData();
+
+    </script>
+</body>
+</html>
