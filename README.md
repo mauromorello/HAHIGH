@@ -1,4 +1,4 @@
-# HAHIGH - Highcharts for Home Assistant with InfluxDB
+# HAHIGH - Highcharts for Home Assistant
 
 ## Overview
 HAHIGH is a resource package designed to visualize data stored in an **InfluxDB** database using the **Highcharts** library. The goal is to provide **highly configurable** visualization options within **Home Assistant**.
