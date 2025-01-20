@@ -53,7 +53,16 @@ You can select one of these through the card’s `chart_type` parameter.
 
 1. **Download** or **copy** the `timeseries-highinflux-card.js` file from this repository.
 2. Place it in the `www/` folder of your Home Assistant configuration (e.g., `/config/www/`).
-3. Go to Settings -> Dashboards, click on the three-dot menu in the top-right corner, and >select Resources. Then, add a new resource, set the type to Module, and enter the correct path to your file, replacing **www** with **local** (e.g., **/www/timeseries-highinflux-card.js** should become **/local/timeseries->highinflux-card.js**)
+3. check your **configuration.yaml** if your folder is whitelisted as above:
+
+```
+homeassistant:
+  allowlist_external_dirs:
+    - /config/www
+```
+
+4. Go to Settings -> Dashboards, click on the three-dot menu in the top-right corner, and >select Resources. Then, add a new resource, set the type to Module, and enter the correct path to your file, replacing **www** with **local** (e.g., **/www/timeseries-highinflux-card.js** should become **/local/timeseries-highinflux-card.js**)
+
 
 After adding it as a resource, open the **Lovelace UI** → **Overview** → **Edit Dashboard** → **Add Card** → find **“Timeseries High Influx Card”**. Configure it via the UI editor or through YAML.
 
