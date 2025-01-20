@@ -130,13 +130,15 @@ You can specify the color in one of the following formats:
 
 If the `color` property is left empty, Highcharts will automatically assign a default color palette to the charts.
 
-### ⚙️ Advanced Series Options (options)
+## ⚙️ Advanced Series Options (options)
+[Higcharts series API](https://api.highcharts.com/highcharts/series)
+
 Each series in the chart supports an optional field called options, allowing customization of various aspects such as color, tooltip visibility, line type, and more.
 
 🔴 **Warning**: This feature is experimental. If you provide an incorrect JSON format or invalid options, the chart may fail to render.
 
-## 📌 Configuration Example
-If you want to set the color to red for the first series, use the following configuration in your YAML or UI editor:
+### 📌 Configuration Example
+If you want to set the witdth to 5 pixels for the first series, use the following configuration in your YAML or UI editor:
 
 ```
 entities:
@@ -149,7 +151,7 @@ entities:
       }
 ```
 
-## 📖 More options Examples
+### 📖 More options Examples
 Here are some advanced configurations you can apply:
 
 ```
