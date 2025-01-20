@@ -617,7 +617,7 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
                 <label class="mdc-text-field mdc-text-field--outlined mdc-text-field--textarea">
                   <span class="mdc-notched-outline">
                     <span class="mdc-notched-outline__leading"></span>
-                    <span class="mdc-floating-label">Highcharts series options</span>
+                    <span class="mdc-floating-label">Highcharts series options <small><a href="https://api.highcharts.com/highcharts/series" TARGET="BLANK">API here</a></small></span>
                     <span class="mdc-notched-outline__trailing"></span>
                   </span>
                   <span class="mdc-text-field__resizer">
