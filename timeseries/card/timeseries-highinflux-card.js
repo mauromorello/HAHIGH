@@ -178,6 +178,24 @@ class TimeseriesHighInfluxCard extends LitElement {
       document.head.appendChild(script);
     });
   }
+  
+  
+    // Esempio di funzione di deep merge artigianale
+    deepMerge(target, source) {
+      // Se `source` non è un oggetto o è null, ritorniamo direttamente il target
+      if (typeof source !== "object" || source === null) {
+        return target;
+      }
+      const merged = { ...target };
+      for (const [key, value] of Object.entries(source)) {
+        if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+          merged[key] = this.deepMerge(merged[key] || {}, value);
+        } else {
+          merged[key] = value;
+        }
+      }
+      return merged;
+    }
 
   /**
    * Main function to query InfluxDB, supporting either
@@ -185,18 +203,20 @@ class TimeseriesHighInfluxCard extends LitElement {
    * - Multiple entities (config.entities)
    */
   async _fetchData() {
-    const config = this._config;
-    const entitiesDefined =
-      Array.isArray(config.entities) && config.entities.length > 0;
+  const config = this._config;
+  const entitiesDefined = Array.isArray(config.entities) && config.entities.length > 0;
 
-    if (entitiesDefined) {
-      // Multiple entities => multiple queries
-      try {
-        const allSeriesData = await Promise.all(
-          config.entities.map((entity) => this._fetchEntityData(entity))
-        );
-        // Build the array of series for Highcharts
-        const chartSeries = allSeriesData.map((dataObj, i) => ({
+  if (entitiesDefined) {
+    // Multiple entities => multiple queries
+    try {
+      const allSeriesData = await Promise.all(
+        config.entities.map((entity) => this._fetchEntityData(entity))
+      );
+
+      // Costruiamo la serie per ogni entity
+      const chartSeries = allSeriesData.map((dataObj, i) => {
+        // Valori base della serie
+        const baseSeries = {
           name: config.entities[i].name || null,
           color: config.entities[i].color || null,
           data: dataObj.parsedData,
@@ -205,21 +225,45 @@ class TimeseriesHighInfluxCard extends LitElement {
               ? ` ${config.entities[i].unita_misura}`
               : ""
           }
-        }));
+        };
 
-        // If data changed, render the chart
-        if (JSON.stringify(chartSeries) !== JSON.stringify(this._lastData)) {
-          this._lastData = chartSeries;
-          this._renderChart(chartSeries);
+        // Se ci sono opzioni extra, tentiamo di fare il parse del JSON
+        let extraOptions = {};
+        if (config.entities[i].options && typeof config.entities[i].options === "string") {
+          try {
+            extraOptions = JSON.parse(config.entities[i].options);
+
+            // (Facoltativo) Controllo minimo: deve essere un oggetto e non un array
+            if (
+              typeof extraOptions !== "object" ||
+              extraOptions === null ||
+              Array.isArray(extraOptions)
+            ) {
+              console.error(`Le opzioni per l'entity[${i}] non sono un oggetto JSON valido`);
+              extraOptions = {};
+            }
+          } catch (e) {
+            console.error(`JSON non valido in config.entities[${i}].options:`, e);
+          }
         }
-      } catch (error) {
-        console.error("Error fetching data for one or more entities:", error);
+
+        // Facciamo il deep merge tra la serie base e le opzioni extra
+        return this.deepMerge(baseSeries, extraOptions);
+      });
+
+      // Se i dati sono cambiati, rilanciamo il rendering
+      if (JSON.stringify(chartSeries) !== JSON.stringify(this._lastData)) {
+        this._lastData = chartSeries;
+        this._renderChart(chartSeries);
       }
-    } else {
-      // Single-query mode
-        console.error("EX single query");
+    } catch (error) {
+      console.error("Error fetching data per una o più entities:", error);
     }
+  } else {
+    // Single-query mode
+    console.error("EX single query");
   }
+}
 
   /**
    * Utility function to fetch data for a single entity
@@ -567,6 +611,26 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
                       data-index=${index}
                       @input=${this._entityValueChanged}
                     >${ent.query || "Put here your query"}</textarea>
+                  </span>
+                </label>
+
+                <label class="mdc-text-field mdc-text-field--outlined mdc-text-field--textarea">
+                  <span class="mdc-notched-outline">
+                    <span class="mdc-notched-outline__leading"></span>
+                    <span class="mdc-floating-label">Highcharts series options</span>
+                    <span class="mdc-notched-outline__trailing"></span>
+                  </span>
+                  <span class="mdc-text-field__resizer">
+                    <textarea
+                      class="mdc-text-field__input"
+                      rows="8"
+                      cols="40"
+                      style="width:100% !important;"
+                      aria-label="Options"
+                      data-field="options"
+                      data-index=${index}
+                      @input=${this._entityValueChanged}
+                    >${ent.options || "Put here your highchart serie options"}</textarea>
                   </span>
                 </label>
 
