@@ -5,6 +5,9 @@
  *******************************************************/
 import { html, css, LitElement } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
 
+// Variabile globale per evitare caricamenti multipli
+window._highchartsLoading = window._highchartsLoading || null;
+
 /********************************************************
  *                 MAIN CARD CLASS
  * Extends LitElement but implements the same logic
@@ -159,43 +162,79 @@ class TimeseriesHighInfluxCard extends LitElement {
   /**
    * Loads the Highcharts script from a CDN (if not already loaded).
    */
-  async _loadHighcharts() {
-    return new Promise((resolve) => {
-      if (window.Highcharts) {
-        resolve();
-        return;
-      }
-      const script = document.createElement("script");
-      script.src = "https://code.highcharts.com/highcharts.js";
-      script.async = true;
-      script.onload = () => {
-        console.log("Highcharts successfully loaded");
-        resolve();
-      };
-      script.onerror = () => {
-        console.error("Error loading Highcharts");
-      };
-      document.head.appendChild(script);
-    });
-  }
+
+    
+    async _loadHighcharts() {
+      return new Promise((resolve, reject) => {
+        // Se Highcharts è già caricato, risolvi subito
+        if (window.Highcharts) {
+          resolve();
+          return;
+        }
+    
+        // Se un altro script è in fase di caricamento, aspettiamo che finisca
+        if (window._highchartsLoading) {
+          window._highchartsLoading.then(resolve).catch(reject);
+          return;
+        }
+    
+        // Se lo script non è caricato e non è in fase di caricamento, lo carichiamo
+        window._highchartsLoading = new Promise((scriptResolve, scriptReject) => {
+          const script = document.createElement("script");
+          script.src = "https://code.highcharts.com/highcharts.js";
+          script.async = true;
+          script.onload = () => {
+            console.log("Highcharts successfully loaded");
+            scriptResolve();
+            resolve();
+          };
+          script.onerror = () => {
+            console.error("Error loading Highcharts");
+            scriptReject();
+            reject();
+          };
+          document.head.appendChild(script);
+        });
+    
+        // Assicuriamoci che altre chiamate aspettino questo caricamento
+        window._highchartsLoading.then(resolve).catch(reject);
+      });
+    }
+
   
   
     // Esempio di funzione di deep merge artigianale
-    deepMerge(target, source) {
-      // Se `source` non è un oggetto o è null, ritorniamo direttamente il target
+    deepMerge(target, source, depth = 0, maxDepth = 10) {
+      if (depth > maxDepth) {
+        return source; // Se superiamo la profondità massima, sovrascriviamo direttamente
+      }
+    
       if (typeof source !== "object" || source === null) {
         return target;
       }
+    
       const merged = { ...target };
+    
       for (const [key, value] of Object.entries(source)) {
-        if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-          merged[key] = this.deepMerge(merged[key] || {}, value);
+        if (Array.isArray(value)) {
+          // Se entrambi sono array, sostituiamo direttamente il valore
+          merged[key] = value.map((item, index) => {
+            if (typeof item === "object" && item !== null && typeof (target[key]?.[index]) === "object") {
+              return this.deepMerge(target[key]?.[index] || {}, item, depth + 1, maxDepth);
+            }
+            return item;
+          });
+        } else if (typeof value === "object" && value !== null) {
+          merged[key] = this.deepMerge(merged[key] || {}, value, depth + 1, maxDepth);
         } else {
           merged[key] = value;
         }
       }
+    
       return merged;
     }
+
+
 
   /**
    * Main function to query InfluxDB, supporting either
@@ -613,7 +652,7 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
                     >${ent.query || "Put here your query"}</textarea>
                   </span>
                 </label>
-
+                
                 <label class="mdc-text-field mdc-text-field--outlined mdc-text-field--textarea">
                   <span class="mdc-notched-outline">
                     <span class="mdc-notched-outline__leading"></span>
