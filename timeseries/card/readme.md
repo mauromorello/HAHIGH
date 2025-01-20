@@ -2,10 +2,10 @@
 
 Welcome to **[HAHIGH](https://github.com/mauromorello/HAHIGH)**! This project integrates the powerful [Highcharts](https://www.highcharts.com/) library into [Home Assistant](https://www.home-assistant.io/), enabling you to display beautiful timeseries charts sourced from your [InfluxDB](https://www.influxdata.com/) database.
 
-<img src="https://github.com/user-attachments/assets/7c474926-b53f-4116-8d6d-7d637bd28d05" style="width:400px;">
-<img src="https://github.com/user-attachments/assets/611f29bf-e261-47f5-a7e2-59f4a119d924" style="width:400px;">
-<img src="https://github.com/user-attachments/assets/1c6d9ff2-d86b-4f79-92cb-843e11388f74" style="width:400px;">
-<img src="https://github.com/user-attachments/assets/861fc8b5-001b-47c1-a5d9-525fde1efe48" style="width:400px;">
+<img src="https://github.com/user-attachments/assets/7c474926-b53f-4116-8d6d-7d637bd28d05" style="width:200px;">
+<img src="https://github.com/user-attachments/assets/611f29bf-e261-47f5-a7e2-59f4a119d924" style="width:200px;">
+<img src="https://github.com/user-attachments/assets/1c6d9ff2-d86b-4f79-92cb-843e11388f74" style="width:200px;">
+<img src="https://github.com/user-attachments/assets/861fc8b5-001b-47c1-a5d9-525fde1efe48" style="width:200px;">
 
 
 ---
@@ -96,6 +96,10 @@ After adding it as a resource, open the **Lovelace UI** → **Overview** → **E
          FROM "%" WHERE ("entity_id" = 'humi_sensor')
          AND time > now() - 90d
          GROUP BY time(1d) fill(null)
+       options: >
+         {
+           "lineWidth": 5
+         }
        unita_misura: "%"
 ```
 
@@ -109,7 +113,8 @@ In these configurations:
 - `entities`: An array of objects, each containing a
    - `query`, INFLUX query fetching your data
    - a `name`, Name of the series
-   - a optionel `color`, see below.
+   - a optional `color`, see below.
+   - a optional `options`, see below.
    - and an optional `unita_misura` for the y-axis tooltip suffix.
  
 #### Series Color Configuration
@@ -125,6 +130,51 @@ You can specify the color in one of the following formats:
 
 If the `color` property is left empty, Highcharts will automatically assign a default color palette to the charts.
 
+### ⚙️ Advanced Series Options (options)
+Each series in the chart supports an optional field called options, allowing customization of various aspects such as color, tooltip visibility, line type, and more.
+
+🔴 **Warning**: This feature is experimental. If you provide an incorrect JSON format or invalid options, the chart may fail to render.
+
+## 📌 Configuration Example
+If you want to set the color to red for the first series, use the following configuration in your YAML or UI editor:
+
+```
+entities:
+  - name: "Temperature"
+    query: "SELECT mean(value) FROM temperature WHERE time > now() - 1d GROUP BY time(5m)"
+    unita_misura: "°C"
+    options: >
+      {
+        "lineWidth": 5
+      }
+```
+
+## 📖 More options Examples
+Here are some advanced configurations you can apply:
+
+```
+{
+  "color": "blue",
+  "dashStyle": "dot",
+  "lineWidth": 2,
+  "tooltip": { "enabled": false }
+}
+```
+👀 What does this do?
+
+The series will be blue
+The line style will be dotted (dot)
+The line width will be 2px
+The tooltip will be disabled for this series
+
+
+## 🚨 Common Mistakes
+
+- ❌ Invalid JSON format (missing commas, incorrect brackets, etc.)
+- ❌ Unsupported keys (e.g., "background": "red" → not a valid series property)
+- ❌ Incorrect values (e.g., "color": 1234 → must be a string)
+
+If the chart does not appear, check the browser console (F12 → Console) for error messages.
 
 
 
