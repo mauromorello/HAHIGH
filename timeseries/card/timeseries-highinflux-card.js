@@ -1,3 +1,4 @@
+
 /********************************************************
  * Import LitElement libraries (version 2.4.0)
  * We use the CDN for simplicity, but you could also
@@ -270,19 +271,20 @@ class TimeseriesHighInfluxCard extends LitElement {
         let extraOptions = {};
         if (config.entities[i].options && typeof config.entities[i].options === "string") {
           try {
-            extraOptions = JSON.parse(config.entities[i].options);
-
-            // (Facoltativo) Controllo minimo: deve essere un oggetto e non un array
-            if (
-              typeof extraOptions !== "object" ||
-              extraOptions === null ||
-              Array.isArray(extraOptions)
-            ) {
-              console.error(`Le opzioni per l'entity[${i}] non sono un oggetto JSON valido`);
-              extraOptions = {};
-            }
+            // new Function('return ...') trasforma una stringa in oggetto/funzione JS
+            // Esempio di testo in textarea: 
+            // {
+            //   color: "green",
+            //   lineWidth: 5,
+            //   marker: { enabled: false },
+            //   tooltip: {
+            //     formatter: function() { return "Value: " + this.y; }
+            //   }
+            // }
+            extraOptions = new Function("return " + config.entities[i].options)();
           } catch (e) {
-            console.error(`JSON non valido in config.entities[${i}].options:`, e);
+            console.error(`Literal JS non valido in config.entities[${i}].options:`, e);
+            extraOptions = {};
           }
         }
 
