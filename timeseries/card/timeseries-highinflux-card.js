@@ -324,53 +324,63 @@ class TimeseriesHighInfluxCard extends LitElement {
   /**
    * Builds the Highcharts chart in the #chartContainer div
    */
-  _renderChart(seriesData) {
-    if (!window.Highcharts) {
-      console.error("Highcharts not available, reloading the library...");
-      // Try reloading the library and then rebuild the chart
-      this._loadHighcharts().then(() => this._renderChart(seriesData));
-      return;
+    _renderChart(seriesData) {
+      if (!window.Highcharts) {
+        console.error("Highcharts not available, reloading the library...");
+        this._loadHighcharts().then(() => this._renderChart(seriesData));
+        return;
+      }
+    
+      const container = this.shadowRoot.getElementById("chartContainer");
+      if (!container) return;
+    
+      // Opzioni base
+      const baseOptions = {
+        chart: {
+          type: this._config.chart_type || "line",
+          zooming: { type: "xy" }
+        },
+        tooltip: {
+          valueDecimals: 1
+        },
+        legend: {
+          enabled: this._config.legend === true
+        },
+        credits: {
+          enabled: false
+        },
+        title: {
+          text: null
+        },
+        xAxis: {
+          type: "datetime"
+        },
+        yAxis: {
+          title: { text: null },
+          max: this._config.max_y !== undefined ? this._config.max_y : null
+        },
+        series: seriesData
+      };
+    
+      // Parso le eventuali opzioni globali
+      let globalChartOptions = {};
+      if (this._config.chart_options) {
+        try {
+          const code = this._config.chart_options;
+          const func = new Function("Highcharts", "return " + code);
+          globalChartOptions = func(window.Highcharts);
+        } catch (e) {
+          console.error("Impossibile interpretare chart_options:", e);
+          globalChartOptions = {};
+        }
+      }
+    
+      // Unisco le due parti prima di creare il grafico
+      const finalOptions = Highcharts.merge(baseOptions, globalChartOptions);
+    
+      // Creo il grafico con le opzioni finali
+      Highcharts.chart(container, finalOptions);
     }
-
-    // Select the container from our shadow DOM
-    const container = this.shadowRoot.getElementById("chartContainer");
-    if (!container) return;
-
-    // Validate chart_type from config (must be one of the allowed)
-    const validChartTypes = ["line", "spline", "area", "areaspline", "bar", "column"];
-    let chartType = validChartTypes.includes(this._config.chart_type)
-      ? this._config.chart_type
-      : "line";
-
-    // Initialize the Highcharts chart
-    Highcharts.chart(container, {
-      chart: {
-        type: chartType,
-        zooming: { type: "xy" }
-      },
-      tooltip: {
-        // Uses valueSuffix from each series
-        valueDecimals: 1
-      },
-      legend: {
-        enabled: this._config.legend === true
-      },
-      credits: {
-        enabled: false
-      },
-      title: {
-        text: null
-      },
-      xAxis: {
-        type: "datetime"
-      },
-      yAxis: {
-        title: { text: null },
-        max: this._config.max_y !== undefined ? this._config.max_y : null
-      },
-      series: seriesData
-    });
-  }
 }
 
 /**
@@ -587,6 +597,25 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
               @change=${this._valueChanged}
             ></ha-switch>
           </ha-formfield>
+          
+            <label class="mdc-text-field mdc-text-field--outlined mdc-text-field--textarea" >
+              <span class="mdc-notched-outline">
+                <span class="mdc-notched-outline__leading"></span>
+                <span class="mdc-floating-label">Highcharts series options <small><a href="https://api.highcharts.com/highcharts/series" TARGET="BLANK">API here</a></small></span>
+                <span class="mdc-notched-outline__trailing"></span>
+              </span>
+              <span class="mdc-text-field__resizer">
+                <textarea
+                  class="mdc-text-field__input"
+                  rows="8"
+                  cols="40"
+                  style="width:100% !important;"
+                  aria-label="Root Chart Options"
+                  data-field="chart_options"
+                  @input=${this._valueChanged}
+                >${this._config.chart_options || "Put here your root chart options"}</textarea>
+              </span>
+            </label>
         </div>
 
         <!-- Multiple entities configuration -->
