@@ -76,18 +76,14 @@ In these configurations are shown minimal parameters to show a timeline-based li
 ```
 type: custom:timeseries-highinflux-card
 influx_url: "http://your_influxdb_host:8086"
-influx_db: "example_db"
-influx_user: "example_user"
-influx_password: "example_pass"
+influx_db: example_db
+influx_user: example_user
+influx_password: example_pass
 entities:
-  - name: Serie 1
-    query: |+
-      SELECT mean("value") 
-      FROM "W" 
-      WHERE ("entity_id" = 'pzem_power') 
-      AND time > now() - 90d 
+  - query: |+
+      SELECT mean("value") FROM "W" 
+      WHERE ("entity_id" = 'example_sensor') AND time > now() - 90d 
       GROUP BY time(1d) fill(null)
-    unita_misura: V
 ```
 
 Less Minimal configuration:
