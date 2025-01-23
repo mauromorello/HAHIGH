@@ -70,6 +70,26 @@ After adding it as a resource, open the **Lovelace UI** → **Overview** → **E
 
 ## Example Configuration
 
+Minimal configuration:
+
+```
+type: custom:timeseries-highinflux-card
+influx_url: "http://your_influxdb_host:8086"
+influx_db: "example_db"
+influx_user: "example_user"
+influx_password: "example_pass"
+entities:
+  - name: Serie 1
+    query: |+
+      SELECT mean("value") 
+      FROM "W" 
+      WHERE ("entity_id" = 'pzem_power') 
+      AND time > now() - 90d 
+      GROUP BY time(1d) fill(null)
+    unita_misura: V
+```
+
+In these configurations are shown minimal parameters to show a timeline-based line graph, with standard color.
 
 ```
    type: custom:timeseries-highinflux-card
