@@ -71,6 +71,7 @@ After adding it as a resource, open the **Lovelace UI** → **Overview** → **E
 ## Example Configuration
 
 Minimal configuration:
+In these configurations are shown minimal parameters to show a timeline-based line graph, with standard color.
 
 ```
 type: custom:timeseries-highinflux-card
@@ -89,7 +90,7 @@ entities:
     unita_misura: V
 ```
 
-In these configurations are shown minimal parameters to show a timeline-based line graph, with standard color.
+Less Minimal configuration:
 
 ```
    type: custom:timeseries-highinflux-card
