@@ -154,6 +154,14 @@ You can specify the color in one of the following formats:
 
 If the `color` property is left empty, Highcharts will automatically assign a default color palette to the charts.
 
+## ⚙️ Advanced Charts Options
+[Higcharts API](https://api.highcharts.com/highcharts)
+
+All chart configuration can be overwritten by these options. Please reter to highcharts "chart" options to understand the power of this config option.
+
+🔴 **Warning**: This feature is experimental. If you provide an incorrect JSON format or invalid options, the chart may fail to render.
+
+
 ## ⚙️ Advanced Series Options (options)
 [Higcharts series API](https://api.highcharts.com/highcharts/series)
 
