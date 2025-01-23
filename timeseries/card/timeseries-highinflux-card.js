@@ -186,7 +186,7 @@ class TimeseriesHighInfluxCard extends LitElement {
           script.src = "https://code.highcharts.com/highcharts.js";
           script.async = true;
           script.onload = () => {
-            console.log("Highcharts successfully loaded");
+            console.log("📈 HAHIGH 0.8... ready to graficare! 💃🏻");
             scriptResolve();
             resolve();
           };
@@ -520,8 +520,15 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
             @input=${this._valueChanged}
           ></ha-textfield>
         </div>
+        
+          <ha-formfield label="Enable configuration options">
+            <ha-switch
+              data-field="showConfigurationOptions"
+              @change=${this._toggleConfigurationVisibility}
+            ></ha-switch>
+          </ha-formfield>
 
-        <div class="section">
+        <div class="section" style="display:${this.isConfigurationVisible ?  `block` :  `none`}">
           <ha-textfield
             label="Influx URL"
             data-field="influx_url"
@@ -557,6 +564,7 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
             .value=${this._config.chart_type || "line"}
             @selected=${this._valueChanged}
             @closed=${(e) => e.stopPropagation()}
+            style="margin-bottom:5px"
           >
             <mwc-list-item value="line">Line</mwc-list-item>
             <mwc-list-item value="spline">Spline</mwc-list-item>
@@ -565,28 +573,11 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
             <mwc-list-item value="bar">Bar</mwc-list-item>
             <mwc-list-item value="column">Column</mwc-list-item>
           </ha-select>
-        </div>
 
-
-        <div class="section">
           <ha-textfield
             label="Chart Height (e.g. 300px)"
             data-field="chart_height"
             .value=${this._config.chart_height || ""}
-            @input=${this._valueChanged}
-          ></ha-textfield>
-
-          <ha-textfield
-            label="Max Y"
-            data-field="max_y"
-            .value=${this._config.max_y || ""}
-            @input=${this._valueChanged}
-          ></ha-textfield>
-
-          <ha-textfield
-            label="Update Interval (ms)"
-            data-field="update_interval"
-            .value=${this._config.update_interval || ""}
             @input=${this._valueChanged}
           ></ha-textfield>
 
@@ -598,24 +589,50 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
             ></ha-switch>
           </ha-formfield>
           
-            <label class="mdc-text-field mdc-text-field--outlined mdc-text-field--textarea" >
-              <span class="mdc-notched-outline">
-                <span class="mdc-notched-outline__leading"></span>
-                <span class="mdc-floating-label">Highcharts series options <small><a href="https://api.highcharts.com/highcharts/series" TARGET="BLANK">API here</a></small></span>
-                <span class="mdc-notched-outline__trailing"></span>
-              </span>
-              <span class="mdc-text-field__resizer">
-                <textarea
-                  class="mdc-text-field__input"
-                  rows="8"
-                  cols="40"
-                  style="width:100% !important;"
-                  aria-label="Root Chart Options"
-                  data-field="chart_options"
-                  @input=${this._valueChanged}
-                >${this._config.chart_options || "Put here your root chart options"}</textarea>
-              </span>
-            </label>
+          <br>
+          <ha-formfield label="Enable advanced options" style="margin-bottom:10px;">
+            <ha-switch
+              data-field="showChartOptions"
+              @change=${this._toggleOptionsVisibility}
+            ></ha-switch>
+          </ha-formfield>
+
+          <div style="display:${this.isOptionsVisible ?  `block` :  `none`}">
+          
+              <ha-textfield
+                label="Max Y"
+                data-field="max_y"
+                .value=${this._config.max_y || ""}
+                @input=${this._valueChanged}
+              ></ha-textfield>
+              
+              <ha-textfield
+                label="Update Interval (ms)"
+                data-field="update_interval"
+                .value=${this._config.update_interval || ""}
+                @input=${this._valueChanged}
+              ></ha-textfield>
+              
+                <label class="mdc-text-field mdc-text-field--outlined mdc-text-field--textarea" >
+                  <span class="mdc-notched-outline">
+                    <span class="mdc-notched-outline__leading"></span>
+                    <span class="mdc-floating-label">Highcharts series options <small><a href="https://api.highcharts.com/highcharts/series" TARGET="BLANK">API here</a></small></span>
+                    <span class="mdc-notched-outline__trailing"></span>
+                  </span>
+                  <span class="mdc-text-field__resizer">
+                    <textarea
+                      class="mdc-text-field__input"
+                      spellcheck="false"
+                      rows="8"
+                      cols="40"
+                      style="width:100% !important;"
+                      aria-label="Root Chart Options"
+                      data-field="chart_options"
+                      @input=${this._valueChanged}
+                    >${this._config.chart_options || "Put here your root chart options"}</textarea>
+                  </span>
+                </label>
+            </div>    
         </div>
 
         <!-- Multiple entities configuration -->
@@ -650,6 +667,7 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
                   <span class="mdc-text-field__resizer">
                     <textarea
                       class="mdc-text-field__input"
+                      spellcheck="false"
                       rows="8"
                       cols="40"
                       style="width:100% !important;"
@@ -671,6 +689,7 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
                   <span class="mdc-text-field__resizer">
                     <textarea
                       class="mdc-text-field__input"
+                      spellcheck="false"
                       rows="8"
                       cols="40"
                       style="width:100% !important;"
@@ -701,10 +720,18 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
           <mwc-button raised label="Add entity" @click=${this._addEntity}>
             <ha-icon icon="hass:plus"></ha-icon>
           </mwc-button>
+          
+
+          
         </div>
       </div>
     `;
   }
+
+   
+ 
+  _toggleOptionsVisibility() { this.isOptionsVisible = !this.isOptionsVisible;  }
+  _toggleConfigurationVisibility() { this.isConfigurationVisible = !this.isConfigurationVisible;  }
 
   static get styles() {
     return css`
