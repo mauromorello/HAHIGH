@@ -6,6 +6,7 @@
  *******************************************************/
 import { html, css, LitElement } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
 
+
 // Variabile globale per evitare caricamenti multipli
 window._highchartsLoading = window._highchartsLoading || null;
 
@@ -434,7 +435,7 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
     } else if (field === "max_y") {
       newConfig.max_y = target.value.trim() === "" ? null : parseFloat(target.value);
     } else if (field === "update_interval") {
-      newConfig.update_interval = parseInt(target.value, 10) || 60000;
+      newConfig.update_interval = parseInt(target.value, 10) * 1000 || 60000;
     } else if (field === "chart_type") {
       // Validate chart type
       const validTypes = ["line", "spline", "area", "areaspline", "bar", "column"];
@@ -451,34 +452,65 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
   }
 
   // Handle changes to per-entity parameters
-  _entityValueChanged(ev) {
-    if (!this._config) return;
-    const target = ev.target;
-    const index = parseInt(target.getAttribute("data-index"), 10);
-    const field = target.getAttribute("data-field");
-    if (isNaN(index) || !field) return;
+    _entityValueChanged(ev) {
+        if (!this._config) return;
+        const target = ev.target;
+        const index = parseInt(target.getAttribute("data-index"), 10);
+        const field = target.getAttribute("data-field");
+        if (isNaN(index) || !field) return;
+    
+        const newEntities = [...this._config.entities];
+        const updatedEntity = { ...newEntities[index] };
+    
+        // Ottiene il valore del sensore e rimuove "sensor." se presente
+        const inputValue = target.value || "";
+        const newSensor = inputValue.replace(/^sensor\./, ""); // Rimuove "sensor." se presente
+    
+        if (field === "sensor" && updatedEntity.query) {
+            console.log("Query prima della sostituzione:", updatedEntity.query);
+    
+            // Sostituisce SOLO il valore di "entity_id"
+            updatedEntity.query = updatedEntity.query.replace(
+                /("entity_id"\s*=\s*)'([^']*)'/,
+                `$1'${newSensor}'`
+            );
+    
+            console.log("Nuova query dopo entity_id:", updatedEntity.query);
+    
+            // Se il nome attuale è vuoto o è uguale al vecchio sensor, aggiorniamo il nome
+            if (!updatedEntity.name || updatedEntity.name === updatedEntity.sensor) {
+                updatedEntity.name = newSensor;
+                console.log(`Nome del sensore aggiornato a: ${updatedEntity.name}`);
+            }
+        }
+    
+        if (field === "unita_misura" && updatedEntity.query) {
+            console.log("Query prima della sostituzione del measurement:", updatedEntity.query);
+    
+            // Sostituisce SOLO il valore tra virgolette dopo FROM "
+            updatedEntity.query = updatedEntity.query.replace(
+                /FROM\s+"([^"]+)"/i,
+                `FROM "${inputValue}"`
+            );
+    
+            console.log("Nuova query dopo FROM:", updatedEntity.query);
+        }
+    
+        updatedEntity[field] = inputValue; // Memorizza il valore originale del textfield
+        newEntities[index] = updatedEntity;
+    
+        const newConfig = { ...this._config, entities: newEntities };
+        this._config = newConfig;
+        this._fireConfigChanged(newConfig);
+    }
 
-    // Copy the entities array
-    const newEntities = [...this._config.entities];
-    // Copy the specific entity
-    const updatedEntity = { ...newEntities[index] };
-
-    // Update the relevant property (name, query, unita_misura, etc.)
-    updatedEntity[field] = target.value;
-    newEntities[index] = updatedEntity;
-
-    // Update config
-    const newConfig = { ...this._config, entities: newEntities };
-    this._config = newConfig;
-    this._fireConfigChanged(newConfig);
-  }
 
   // Add a new blank entity
   _addEntity() {
     if (!this._config) return;
     const newEntities = [...(this._config.entities || [])];
     // Example of a "blank" entity
-    newEntities.push({ name: "", color: "", query: "", unita_misura: "" });
+    newEntities.push({ name: "temperature", color: "", query: "SELECT mean(\"value\")  FROM \"°C\" \r\n WHERE (\"entity_id\" = 'temperature') AND time > now() - 90d \r\n GROUP BY time(1d) fill(null)", unita_misura: "°C", sensor: "temperature" });
 
     const newConfig = { ...this._config, entities: newEntities };
     this._config = newConfig;
@@ -505,6 +537,22 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
         composed: true
       })
     );
+  }
+
+  _toggleEntityOptionsVisibility(index) {
+      if (!this._config || !this._config.entities[index]) return;
+  
+      // Creiamo una nuova copia delle entità con lo stato aggiornato
+      const newEntities = [...this._config.entities];
+      newEntities[index] = {
+          ...newEntities[index],
+          isEntityOptionsVisible: !newEntities[index].isEntityOptionsVisible // Inverti lo stato attuale
+      };
+  
+      // Aggiorniamo la configurazione
+      const newConfig = { ...this._config, entities: newEntities };
+      this._config = newConfig;
+      this._fireConfigChanged(newConfig);
   }
 
   render() {
@@ -629,7 +677,7 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
                       aria-label="Root Chart Options"
                       data-field="chart_options"
                       @input=${this._valueChanged}
-                    >${this._config.chart_options || "Put here your root chart options"}</textarea>
+                    >${this._config.chart_options || "{}"}</textarea>
                   </span>
                 </label>
             </div>    
@@ -643,64 +691,14 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
             <div class="entity">
               
               <ha-textfield
-                label="Entity Name"
-                .value=${ent.name || ""}
-                data-field="name"
+                label="Entity"
+                .value=${ent.sensor|| ""}
+                data-field="sensor"
                 data-index=${index}
                 @input=${this._entityValueChanged}
               ></ha-textfield>
+
               
-              <ha-textfield
-                label="Color"
-                .value=${ent.color || ""}
-                data-field="color"
-                data-index=${index}
-                @input=${this._entityValueChanged}
-              ></ha-textfield>
-
-                <label class="mdc-text-field mdc-text-field--outlined mdc-text-field--textarea">
-                  <span class="mdc-notched-outline">
-                    <span class="mdc-notched-outline__leading"></span>
-                    <span class="mdc-floating-label">Influx Query</span>
-                    <span class="mdc-notched-outline__trailing"></span>
-                  </span>
-                  <span class="mdc-text-field__resizer">
-                    <textarea
-                      class="mdc-text-field__input"
-                      spellcheck="false"
-                      rows="8"
-                      cols="40"
-                      style="width:100% !important;"
-                      aria-label="Influx Query"
-                      data-field="query"
-                      data-index=${index}
-                      @input=${this._entityValueChanged}
-                    >${ent.query || "Put here your query"}</textarea>
-                  </span>
-                </label>
-                
-                
-                <label class="mdc-text-field mdc-text-field--outlined mdc-text-field--textarea" >
-                  <span class="mdc-notched-outline">
-                    <span class="mdc-notched-outline__leading"></span>
-                    <span class="mdc-floating-label">Highcharts series options <small><a href="https://api.highcharts.com/highcharts/series" TARGET="BLANK">API here</a></small></span>
-                    <span class="mdc-notched-outline__trailing"></span>
-                  </span>
-                  <span class="mdc-text-field__resizer">
-                    <textarea
-                      class="mdc-text-field__input"
-                      spellcheck="false"
-                      rows="8"
-                      cols="40"
-                      style="width:100% !important;"
-                      aria-label="Options"
-                      data-field="options"
-                      data-index=${index}
-                      @input=${this._entityValueChanged}
-                    >${ent.options || "Put here your highchart serie options"}</textarea>
-                  </span>
-                </label>
-
               <ha-textfield
                 label="Unit of measure"
                 .value=${ent.unita_misura || ""}
@@ -708,7 +706,77 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
                 data-index=${index}
                 @input=${this._entityValueChanged}
               ></ha-textfield>
-
+              
+              <!-- Switch per attivare/disattivare il div secondario -->
+              <ha-formfield label="Show advanced options" style="margin-bottom:10px;">
+                <ha-switch
+                  .checked=${ent.isEntityOptionsVisible || false}
+                  data-index=${index}
+                  @change=${() => this._toggleEntityOptionsVisibility(index)}
+                ></ha-switch>
+              </ha-formfield>
+              
+              <div style="display:${ent.isEntityOptionsVisible ? `block` : `none`};">
+                  <ha-textfield
+                    label="Entity Name"
+                    .value=${ent.name || ""}
+                    data-field="name"
+                    data-index=${index}
+                    @input=${this._entityValueChanged}
+                  ></ha-textfield>
+                  
+                  <ha-textfield
+                    label="Color"
+                    .value=${ent.color || ""}
+                    data-field="color"
+                    data-index=${index}
+                    @input=${this._entityValueChanged}
+                  ></ha-textfield>
+    
+                    <label class="mdc-text-field mdc-text-field--outlined mdc-text-field--textarea">
+                      <span class="mdc-notched-outline">
+                        <span class="mdc-notched-outline__leading"></span>
+                        <span class="mdc-floating-label">Influx Query</span>
+                        <span class="mdc-notched-outline__trailing"></span>
+                      </span>
+                      <span class="mdc-text-field__resizer">
+                        <textarea
+                          class="mdc-text-field__input"
+                          spellcheck="false"
+                          rows="8"
+                          cols="40"
+                          style="width:100% !important;"
+                          aria-label="Influx Query"
+                          data-field="query"
+                          data-index=${index}
+                          @input=${this._entityValueChanged}
+                        >${ent.query ||"SELECT mean(\"value\")  FROM \"°C\" \r\n WHERE (\"entity_id\" = 'temperature') AND time > now() - 90d \r\n GROUP BY time(1d) fill(null)"}
+                        </textarea>
+                      </span>
+                    </label>
+                    
+                    
+                    <label class="mdc-text-field mdc-text-field--outlined mdc-text-field--textarea" >
+                      <span class="mdc-notched-outline">
+                        <span class="mdc-notched-outline__leading"></span>
+                        <span class="mdc-floating-label">Highcharts series options <small><a href="https://api.highcharts.com/highcharts/series" TARGET="BLANK">API here</a></small></span>
+                        <span class="mdc-notched-outline__trailing"></span>
+                      </span>
+                      <span class="mdc-text-field__resizer">
+                        <textarea
+                          class="mdc-text-field__input"
+                          spellcheck="false"
+                          rows="8"
+                          cols="40"
+                          style="width:100% !important;"
+                          aria-label="Options"
+                          data-field="options"
+                          data-index=${index}
+                          @input=${this._entityValueChanged}
+                        >${ent.options || "{}"}</textarea>
+                      </span>
+                    </label>
+                </div>
               <mwc-icon-button
                 class="delete-button"
                 @click=${() => this._removeEntity(index)}
@@ -773,7 +841,11 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
         display: block;
         margin-top: 8px;
       }
-    `;
+      .entity-picker {
+        min-height: 40px;
+        display: block;
+      }
+      `;  // ✅ Corretta chiusura del template literal con backtick
   }
 }
 
