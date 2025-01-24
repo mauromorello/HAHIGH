@@ -1,11 +1,12 @@
 
+const version = "0.8.2";
+
 /********************************************************
  * Import LitElement libraries (version 2.4.0)
  * We use the CDN for simplicity, but you could also
  * use the version bundled with Home Assistant.
  *******************************************************/
 import { html, css, LitElement } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
-
 
 // Variabile globale per evitare caricamenti multipli
 window._highchartsLoading = window._highchartsLoading || null;
@@ -17,6 +18,14 @@ window._highchartsLoading = window._highchartsLoading || null;
  * as the previous "HighInfluxCard" you had working.
  ********************************************************/
 class TimeseriesHighInfluxCard extends LitElement {
+  
+  constructor() {
+    super();
+
+    if (!TimeseriesHighInfluxCard._hassGlobal) {
+        TimeseriesHighInfluxCard._hassGlobal = null; // 🔹 Inizializza la variabile globale
+    }
+  }
 
   /**
    * Reactive properties for the card:
@@ -30,6 +39,7 @@ class TimeseriesHighInfluxCard extends LitElement {
     return {
       _config: { type: Object },
       _hass: { type: Object },
+      _entities: { type: Array }, // Lista di entità disponibili
       _lastData: { type: Object },
       _timeoutId: { type: Number },
       setupComplete: { type: Boolean }
@@ -48,7 +58,7 @@ class TimeseriesHighInfluxCard extends LitElement {
   static getStubConfig() {
     // Basic default configuration
     return {
-      title: "InfluxDB Chart",
+      title: "HAHIGH!",
       influx_url: "http://localhost:8086",
       influx_db: "mydb",
       influx_user: "admin",
@@ -81,15 +91,64 @@ class TimeseriesHighInfluxCard extends LitElement {
         "You must define either a set of entities (entities) or the single parameters (influx_url, influx_db, etc.)."
       );
     }
+    
+      // Se Home Assistant è già disponibile
+      if (this.hass) {
+        this._entities = Object.keys(this.hass.states).filter(
+          (e) => e.startsWith("sensor.") // Filtra solo i sensori
+        );
+      } else {
+        this._entities = []; // Inizializza vuoto
+      }
+      
   }
+    
+    updated(changedProps) {
+      if (changedProps.has("hass")) {
+        //console.log("hass.states:", this.hass.states); // Debug completo
+    
+        this._entities = Object.keys(this.hass.states).filter(
+          (e) => e.startsWith("sensor.") // Recupera solo i sensori
+        );
+        //console.log("Updated entities FROM UPDATE:"); // Debug
+        
+      }
+    }
+  
 
   /**
    * Called by Lovelace on each update cycle.
    * Typically used to store the hass object if needed.
    */
-  set hass(hass) {
-    this._hass = hass;
-  }
+    set hass(hass) {
+        if (!hass) {
+            console.warn("⚠️ `hass` è undefined! Mantengo il valore precedente.");
+            return;
+        }
+
+        //console.log("📡 Ricevuto nuovo `hass`:", hass);
+
+        // 🔹 Salviamo `hass` in una variabile statica globale
+        TimeseriesHighInfluxCard._hassGlobal = hass;
+        this._hass = hass;
+
+        if (!this._hass.states) {
+            console.warn("⚠️ `hass.states` non è disponibile! Riproverò più tardi.");
+            return;
+        }
+
+        const newEntities = Object.keys(this._hass.states).filter(
+            (e) => e.startsWith("sensor.")
+        );
+
+        if (JSON.stringify(newEntities) === JSON.stringify(this._entities)) {
+            return;
+        }
+
+        this._entities = newEntities;
+        //console.log("✅ Updated entities from SET HASS:", this._entities);
+    }
+
 
   /**
    * The LitElement render() method builds the DOM that will
@@ -130,14 +189,21 @@ class TimeseriesHighInfluxCard extends LitElement {
    * load Highcharts and start the data update loop.
    */
   firstUpdated() {
-    // If not already set up, start loading Highcharts
+    // Se non è già stato configurato, carica Highcharts
     if (!this.setupComplete) {
       this._loadHighcharts().then(() => {
         this.setupComplete = true;
         this._startAutoUpdate();
       });
     }
+  
+    // 🔹 Forza il refresh della UI per visualizzare `ha-combo-box`
+    //setTimeout(() => {
+    //  console.log("Forcing UI refresh after first render.");
+    //  this.requestUpdate();
+    //}, 100);
   }
+
 
   /**
    * When the element is removed from the DOM,
@@ -187,7 +253,7 @@ class TimeseriesHighInfluxCard extends LitElement {
           script.src = "https://code.highcharts.com/highcharts.js";
           script.async = true;
           script.onload = () => {
-            console.log("📈 HAHIGH 0.8... ready to graficare! 💃🏻");
+            console.log("📈 HAHIGH " + version + "... go to graficare! 💃🏻");
             scriptResolve();
             resolve();
           };
@@ -240,17 +306,6 @@ class TimeseriesHighInfluxCard extends LitElement {
         let extraOptions = {};
         if (config.entities[i].options && typeof config.entities[i].options === "string") {
           try {
-            // new Function('return ...') trasforma una stringa in oggetto/funzione JS
-            // Esempio di testo in textarea: 
-            // {
-            //   color: "green",
-            //   lineWidth: 5,
-            //   marker: { enabled: false },
-            //   tooltip: {
-            //     formatter: function() { return "Value: " + this.y; }
-            //   }
-            // }
-            //extraOptions = new Function("return " + config.entities[i].options)();
             const code = config.entities[i].options;
             try {
               // Passa l'oggetto Highcharts alla funzione 
@@ -267,8 +322,6 @@ class TimeseriesHighInfluxCard extends LitElement {
           }
         }
 
-        // Facciamo il deep merge tra la serie base e le opzioni extra
-       // return this.deepMerge(baseSeries, extraOptions);
         return Highcharts.merge(baseSeries, extraOptions);
       });
 
@@ -408,14 +461,19 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
     };
   }
 
-  setConfig(config) {
-    // Copy to avoid mutating the original
-    this._config = { ...config };
-    // If no entities array, initialize it
-    if (!this._config.entities) {
-      this._config.entities = [];
+    setConfig(config) {
+      this._config = { ...config };
+      console.log("📡 setConfig - Valore caricato da _config:", this._config?.entities);
+      // 🔹 Se la configurazione non ha entità definite, usiamo quelle già trovate
+      if (!this._entities || this._entities.length === 0) {
+        this._entities = Object.keys(this.hass?.states || {}).filter(
+          (e) => e.startsWith("sensor.")
+        );
+        //console.log("Config set. Entities SET BY CONFIG available:");
+      }
+    
+      
     }
-  }
 
   // Handle changes to generic (top-level) parameters
   _valueChanged(ev) {
@@ -451,58 +509,133 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
     this._fireConfigChanged(newConfig);
   }
 
-  // Handle changes to per-entity parameters
+
+    // Funzione di supporto per ottenere `hass`, evitando errori se è undefined
+    _getHass() {
+        return this._hass || TimeseriesHighInfluxCard._hassGlobal;
+    }
+
+    // Gestisce i cambiamenti nei parametri di configurazione generali
+    _valueChanged(ev) {
+        if (!this._config) return;
+    
+        const target = ev.target;
+        const newConfig = { ...this._config };
+        const field = target.getAttribute("data-field");
+        if (!field) return;
+    
+        if (field === "legend") {
+            newConfig.legend = target.checked;
+        } else if (field === "max_y") {
+            newConfig.max_y = target.value.trim() === "" ? null : parseFloat(target.value);
+        } else if (field === "update_interval") {
+            newConfig.update_interval = parseInt(target.value, 10) * 1000 || 60000;
+        } else if (field === "chart_type") {
+            const validTypes = ["line", "spline", "area", "areaspline", "bar", "column"];
+            newConfig.chart_type = validTypes.includes(target.value) ? target.value : "line";
+        } else {
+            newConfig[field] = target.value;
+        }
+    
+        if (JSON.stringify(newConfig) !== JSON.stringify(this._config)) {
+            this._config = newConfig;
+            this._fireConfigChanged(newConfig);
+        }
+    }
+    
+    // Gestisce i cambiamenti nei parametri per ogni entità
     _entityValueChanged(ev) {
         if (!this._config) return;
+    
         const target = ev.target;
         const index = parseInt(target.getAttribute("data-index"), 10);
         const field = target.getAttribute("data-field");
         if (isNaN(index) || !field) return;
     
+        this._editing = true;
+    
         const newEntities = [...this._config.entities];
         const updatedEntity = { ...newEntities[index] };
     
-        // Ottiene il valore del sensore e rimuove "sensor." se presente
-        const inputValue = target.value || "";
-        const newSensor = inputValue.replace(/^sensor\./, ""); // Rimuove "sensor." se presente
+        const inputValue = ev.detail?.value || target.value || "";
+        const newSensor = inputValue.replace(/^sensor\./, "");
     
+        // Se cambia il sensore, aggiorna la query e cerca l'unità di misura
         if (field === "sensor" && updatedEntity.query) {
-            console.log("Query prima della sostituzione:", updatedEntity.query);
+            //console.log("Query prima della sostituzione:", updatedEntity.query);
     
-            // Sostituisce SOLO il valore di "entity_id"
             updatedEntity.query = updatedEntity.query.replace(
                 /("entity_id"\s*=\s*)'([^']*)'/,
                 `$1'${newSensor}'`
             );
     
-            console.log("Nuova query dopo entity_id:", updatedEntity.query);
+            //console.log("Nuova query dopo entity_id:", updatedEntity.query);
     
-            // Se il nome attuale è vuoto o è uguale al vecchio sensor, aggiorniamo il nome
+            const hass = this._getHass();
+    
+            if (!hass || !hass.states) {
+                console.error("❌ ERRORE: `_hass` o `hass.states` è undefined.");
+            } else {
+    
+                const sensorData = hass.states["sensor." + newSensor];
+                
+                if (sensorData) {
+                    const unit = sensorData.attributes?.unit_of_measurement || "";
+    
+                    if (unit && updatedEntity.unita_misura !== unit) {
+                        
+                        updatedEntity.unita_misura = unit;
+                        updatedEntity.sensor = inputValue;
+                        updatedEntity.name = newSensor;
+    
+                        updatedEntity.query = updatedEntity.query.replace(
+                            /FROM\s+"([^"]+)"/i,
+                            `FROM "${unit}"`
+                        );
+                        
+                        this._forceRender = true; // 🔹 Attiviamo il rendering forzato
+                    }
+                } else {
+                    console.warn(`⚠️ Il sensore ${newSensor} non è stato trovato in hass.states.`);
+                }
+            }
+    
             if (!updatedEntity.name || updatedEntity.name === updatedEntity.sensor) {
                 updatedEntity.name = newSensor;
                 console.log(`Nome del sensore aggiornato a: ${updatedEntity.name}`);
             }
         }
     
+        // Se viene modificata manualmente l'unità di misura, aggiorna solo la query
         if (field === "unita_misura" && updatedEntity.query) {
-            console.log("Query prima della sostituzione del measurement:", updatedEntity.query);
+            //console.log("Query prima della sostituzione del measurement:", updatedEntity.query);
     
-            // Sostituisce SOLO il valore tra virgolette dopo FROM "
             updatedEntity.query = updatedEntity.query.replace(
                 /FROM\s+"([^"]+)"/i,
                 `FROM "${inputValue}"`
             );
     
-            console.log("Nuova query dopo FROM:", updatedEntity.query);
+            //console.log("Nuova query dopo FROM:", updatedEntity.query);
         }
     
-        updatedEntity[field] = inputValue; // Memorizza il valore originale del textfield
+        updatedEntity[field] = inputValue;
         newEntities[index] = updatedEntity;
     
-        const newConfig = { ...this._config, entities: newEntities };
-        this._config = newConfig;
-        this._fireConfigChanged(newConfig);
+        if (JSON.stringify(newEntities) !== JSON.stringify(this._config.entities)) {
+            this._config = { ...this._config, entities: newEntities };
+            this._fireConfigChanged(this._config);
+        }
+    
+        //if (target.tagName === "HA-COMBO-BOX" || target.tagName === "HA-SELECT") {
+        //    target.open = false;
+        //}
+    
+        console.log(`Campo "${field}" aggiornato con valore:`, inputValue);
     }
+
+
+
+
 
 
   // Add a new blank entity
@@ -554,10 +687,37 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
       this._config = newConfig;
       this._fireConfigChanged(newConfig);
   }
+  
+    shouldUpdate(changedProps) {
+        //console.log("shouldUpdate chiamato. Stato _openCombos:", this._openCombos);
+    
+        if (this._forceRender) {
+          //console.log("🔄 Forzato il rendering dopo aggiornamento sensore o unità di misura.");
+          this._forceRender = false; // Resettiamo il flag dopo il rendering
+          return true;
+        }
+    
+        // 🔹 Se `_openCombos` è undefined, non bloccare il rendering
+        if (!this._openCombos || Object.keys(this._openCombos).length === 0) {
+        //    console.log("shouldUpdate: Nessun combobox aperto, rendering consentito.");
+            return true;
+        }
+    
+        // 🔹 Se almeno un combobox è aperto, blocca il rendering
+        if (Object.values(this._openCombos).some(isOpen => isOpen)) {
+            //console.log("Bloccato il rendering: almeno un combobox è aperto");
+            return false;
+        }
+    
+        //console.log("shouldUpdate: Tutti i combobox chiusi, rendering consentito.");
+        return true;
+    }
 
   render() {
     if (!this._config) return html``;
-
+    //console.log("Rendering....");
+    
+    
     return html`
       <div class="card-config">
         <div class="section">
@@ -567,6 +727,8 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
             .value=${this._config.title || ""}
             @input=${this._valueChanged}
           ></ha-textfield>
+          
+    
         </div>
         
           <ha-formfield label="Enable configuration options">
@@ -661,42 +823,62 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
                 @input=${this._valueChanged}
               ></ha-textfield>
               
-                <label class="mdc-text-field mdc-text-field--outlined mdc-text-field--textarea" >
-                  <span class="mdc-notched-outline">
-                    <span class="mdc-notched-outline__leading"></span>
-                    <span class="mdc-floating-label">Highcharts series options <small><a href="https://api.highcharts.com/highcharts/series" TARGET="BLANK">API here</a></small></span>
-                    <span class="mdc-notched-outline__trailing"></span>
-                  </span>
-                  <span class="mdc-text-field__resizer">
-                    <textarea
-                      class="mdc-text-field__input"
-                      spellcheck="false"
-                      rows="8"
-                      cols="40"
-                      style="width:100% !important;"
-                      aria-label="Root Chart Options"
-                      data-field="chart_options"
-                      @input=${this._valueChanged}
-                    >${this._config.chart_options || "{}"}</textarea>
-                  </span>
-                </label>
+              <label class="mdc-text-field mdc-text-field--outlined mdc-text-field--textarea" >
+                <span class="mdc-notched-outline">
+                  <span class="mdc-notched-outline__leading"></span>
+                  <span class="mdc-floating-label">Highcharts series options <small><a href="https://api.highcharts.com/highcharts/series" TARGET="BLANK">API here</a></small></span>
+                  <span class="mdc-notched-outline__trailing"></span>
+                </span>
+                <span class="mdc-text-field__resizer">
+                  <textarea
+                    class="mdc-text-field__input"
+                    spellcheck="false"
+                    rows="8"
+                    cols="40"
+                    style="width:100% !important;"
+                    aria-label="Root Chart Options"
+                    data-field="chart_options"
+                    @input=${this._valueChanged}
+                  >${this._config.chart_options || "{}"}</textarea>
+                </span>
+              </label>
             </div>    
         </div>
 
         <!-- Multiple entities configuration -->
         
         <div class="entities section">
-          <h4>Entities (multiple series on the chart)</h4>
+          <h4>Entities</h4>
           ${this._config.entities.map((ent, index) => html`
             <div class="entity">
               
-              <ha-textfield
-                label="Entity"
-                .value=${ent.sensor|| ""}
-                data-field="sensor"
-                data-index=${index}
-                @input=${this._entityValueChanged}
-              ></ha-textfield>
+              
+            <ha-combo-box
+              label="Entity"
+              .value=${ent.sensor?.startsWith("sensor.") ? ent.sensor : `sensor.${ent.sensor || ""}`}
+              data-field="sensor"
+              data-index=${index}
+              .items=${this._entities.map(entity => ({ value: entity, label: entity }))}
+            
+              @focusin=${() => { 
+                  if (!this._openCombos) this._openCombos = {}; 
+                  this._openCombos[index] = true; 
+                  //console.log(`Combo aperto su index ${index}:`, this._openCombos);
+                  this.requestUpdate(); 
+              }}
+              @focusout=${() => { 
+                  if (this._openCombos) { 
+                      delete this._openCombos[index]; 
+                  }
+                  //console.log(`Combo chiuso su index ${index}:`, this._openCombos);
+                  this.requestUpdate(); 
+              }}
+            
+              @value-changed=${this._entityValueChanged}
+            >
+            </ha-combo-box>
+
+
 
               
               <ha-textfield
