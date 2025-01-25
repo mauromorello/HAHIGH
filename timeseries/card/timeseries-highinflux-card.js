@@ -1,5 +1,5 @@
 
-const version = "0.8.2";
+const version = "0.8.3"; //Stacked and percentage area
 
 /********************************************************
  * Import LitElement libraries (version 2.4.0)
@@ -76,7 +76,7 @@ class TimeseriesHighInfluxCard extends LitElement {
     this.setupComplete = false;
 
     // Auto-update interval in ms (default: 60s)
-    this.updateInterval = config.update_interval || 60000;
+    this.updateInterval = (config.update_interval) || 60;
 
     // Check if we have single-query configuration or multiple entities
     const singleQueryDefined =
@@ -102,7 +102,12 @@ class TimeseriesHighInfluxCard extends LitElement {
       }
       
   }
-    
+  
+  
+   /**
+   * Per riprendesi le entità
+   * once updates the card.
+   */  
     updated(changedProps) {
       if (changedProps.has("hass")) {
         //console.log("hass.states:", this.hass.states); // Debug completo
@@ -156,21 +161,28 @@ class TimeseriesHighInfluxCard extends LitElement {
    * a container for the Highcharts chart.
    */
   render() {
-    // If config is not ready, render nothing
-    if (!this._config) {
-      return html``;
-    }
-
-    return html`
-      <ha-card .header=${this._config.title || ""}>
-        <div
-          id="chartContainer"
-          style="width: 100%; height: ${this._config.chart_height || "100%"};"
-        >
-        </div>
-      </ha-card>
-    `;
+      // If config is not ready, render nothing
+      if (!this._config) {
+          return html``;
+      }
+  
+      return html`
+        <ha-card .header=${this._config.title || ""}>
+          ${this._queryError ? html`
+            <div style="color: red; padding: 10px; border: 1px solid red; background: #ffe6e6; margin-bottom: 10px;">
+                <strong>⚠️ Errore:</strong> ${this._queryError}
+            </div>
+          ` : ""}
+  
+          <div
+            id="chartContainer"
+            style="width: 100%; height: ${this._config.chart_height || "100%"};"
+          >
+          </div>
+        </ha-card>
+      `;
   }
+
 
   /**
    * Optional CSS styles for the card
@@ -225,7 +237,7 @@ class TimeseriesHighInfluxCard extends LitElement {
       clearInterval(this._timeoutId);
     }
     this._fetchData(); // immediate fetch
-    this._timeoutId = setInterval(() => this._fetchData(), this.updateInterval);
+    this._timeoutId = setInterval(() => this._fetchData(), this.updateInterval * 1000);
   }
 
   /**
@@ -280,6 +292,7 @@ class TimeseriesHighInfluxCard extends LitElement {
   async _fetchData() {
   const config = this._config;
   const entitiesDefined = Array.isArray(config.entities) && config.entities.length > 0;
+  //console.log("Fetching data... ", this.updateInterval * 1000);
 
   if (entitiesDefined) {
     // Multiple entities => multiple queries
@@ -313,11 +326,13 @@ class TimeseriesHighInfluxCard extends LitElement {
               extraOptions = func(window.Highcharts);
             } catch (e) {
               console.error("Impossibile interpretare options:", e);
+              this._queryError = `Wrong chart options;`;
               extraOptions = {};
             }
  
           } catch (e) {
             console.error(`Literal JS non valido in config.entities[${i}].options:`, e);
+            this._queryError = `Configuration not valid in serie #${i};`;
             extraOptions = {};
           }
         }
@@ -335,7 +350,7 @@ class TimeseriesHighInfluxCard extends LitElement {
     }
   } else {
     // Single-query mode
-    console.error("EX single query");
+    //  console.error("EX single query");
   }
 }
 
@@ -344,36 +359,53 @@ class TimeseriesHighInfluxCard extends LitElement {
    * (used in multiple-entities mode)
    */
   async _fetchEntityData(entity) {
-    const config = this._config;
-    if (!entity.query) {
-      throw new Error("Each entity must define a 'query' parameter.");
-    }
-
-    const url =
-      `${config.influx_url}/query?u=${encodeURIComponent(config.influx_user)}` +
-      `&p=${encodeURIComponent(config.influx_password)}` +
-      `&db=${encodeURIComponent(config.influx_db)}` +
-      `&q=${encodeURIComponent(entity.query)}`;
-
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
-    }
-    const data = await response.json();
-
-    // In case of query with no results, avoid errors
-    if (!data.results[0] || !data.results[0].series) {
-      return { parsedData: [] };
-    }
-
-    const seriesValues = data.results[0].series[0].values;
-    const parsedData = seriesValues.map((point) => [
-      new Date(point[0]).getTime(),
-      point[1]
-    ]);
-
-    return { parsedData };
+      const config = this._config;
+      if (!entity.query) {
+          this._queryError = "❌ Query non valid;"
+          this.requestUpdate();
+          return { parsedData: [] };
+      }
+  
+      const url =
+          `${config.influx_url}/query?u=${encodeURIComponent(config.influx_user)}` +
+          `&p=${encodeURIComponent(config.influx_password)}` +
+          `&db=${encodeURIComponent(config.influx_db)}` +
+          `&q=${encodeURIComponent(entity.query)}`;
+  
+      try {
+          const response = await fetch(url);
+          if (!response.ok) {
+              throw new Error(`Errore HTTP: ${response.status}`);
+          }
+  
+          const data = await response.json();
+  
+          if (!data.results[0] || !data.results[0].series) {
+              this._queryError = "⚠️ Nessun risultato trovato per la query.";
+              this.requestUpdate();
+              return { parsedData: [] };
+          }
+  
+          // Reset errore se la query ha avuto successo
+          this._queryError = null;
+          this.requestUpdate();
+  
+          const seriesValues = data.results[0].series[0].values;
+          const parsedData = seriesValues.map((point) => [
+              new Date(point[0]).getTime(),
+              point[1]
+          ]);
+  
+          return { parsedData };
+  
+      } catch (error) {
+          console.error("❌ Errore durante la chiamata al database:", error);
+          this._queryError = `❌ Query error: ${error.message}`;
+          this.requestUpdate();
+          return { parsedData: [] };
+      }
   }
+
 
   /**
    * Builds the Highcharts chart in the #chartContainer div
@@ -429,9 +461,20 @@ class TimeseriesHighInfluxCard extends LitElement {
         }
       }
     
-      // Unisco le due parti prima di creare il grafico
-      const finalOptions = Highcharts.merge(baseOptions, globalChartOptions);
+     //console.log("BASE OPTIONS: ", baseOptions);
+     //console.log("CHART OPTIONS: ", globalChartOptions);
+     //console.log("STACK OPTIONS: ", this._config.stackedOptions);
     
+      // Unisco le due parti prima di creare il grafico
+      const finalOptions = Highcharts.merge(
+          {},  // Un oggetto vuoto evita la modifica di baseOptions
+          baseOptions,
+          this._config.stackedOptions || {},  // Fusione stacking
+          globalChartOptions || {}  // Fusione chart_options
+      );
+
+      //console.log("FINAL OPTIONS: ", finalOptions);
+      
       // Creo il grafico con le opzioni finali
       Highcharts.chart(container, finalOptions);
     }
@@ -454,7 +497,8 @@ window.customCards.push({
  * multiple entities (entities).
  ********************************************************/
 class TimeseriesHighInfluxCardEditor extends LitElement {
-  static get properties() {
+    
+    static get properties() {
     return {
       hass: {},
       _config: {}
@@ -462,8 +506,10 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
   }
 
     setConfig(config) {
-      this._config = { ...config };
-      console.log("📡 setConfig - Valore caricato da _config:", this._config?.entities);
+      
+      this._config = { ...config, entities: config.entities || [] };
+
+      //console.log("📡 setConfig - Valore caricato da _config:", this._config?.entities);
       // 🔹 Se la configurazione non ha entità definite, usiamo quelle già trovate
       if (!this._entities || this._entities.length === 0) {
         this._entities = Object.keys(this.hass?.states || {}).filter(
@@ -474,41 +520,6 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
     
       
     }
-
-  // Handle changes to generic (top-level) parameters
-  _valueChanged(ev) {
-    if (!this._config) return;
-    const target = ev.target;
-    const newConfig = { ...this._config };
-
-    // We use data-field="..." to decide which property to update
-    const field = target.getAttribute("data-field");
-    if (!field) return;
-
-    // For the boolean (legend) we look at target.checked
-    // For numeric (max_y, update_interval) we parse them
-    // For strings (url, user, password, etc.) we take target.value
-    if (field === "legend") {
-      newConfig.legend = target.checked;
-    } else if (field === "max_y") {
-      newConfig.max_y = target.value.trim() === "" ? null : parseFloat(target.value);
-    } else if (field === "update_interval") {
-      newConfig.update_interval = parseInt(target.value, 10) * 1000 || 60000;
-    } else if (field === "chart_type") {
-      // Validate chart type
-      const validTypes = ["line", "spline", "area", "areaspline", "bar", "column"];
-      newConfig.chart_type = validTypes.includes(target.value)
-        ? target.value
-        : "line";
-    } else {
-      // fallback: string fields
-      newConfig[field] = target.value;
-    }
-
-    this._config = newConfig;
-    this._fireConfigChanged(newConfig);
-  }
-
 
     // Funzione di supporto per ottenere `hass`, evitando errori se è undefined
     _getHass() {
@@ -529,10 +540,27 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
         } else if (field === "max_y") {
             newConfig.max_y = target.value.trim() === "" ? null : parseFloat(target.value);
         } else if (field === "update_interval") {
-            newConfig.update_interval = parseInt(target.value, 10) * 1000 || 60000;
+            newConfig.update_interval = parseInt(target.value, 10) || 60;
         } else if (field === "chart_type") {
+            //const validTypes = ["line", "spline", "area", "areaspline", "bar", "column"];
+
             const validTypes = ["line", "spline", "area", "areaspline", "bar", "column"];
-            newConfig.chart_type = validTypes.includes(target.value) ? target.value : "line";
+            
+            if (target.value === "areastacked") {
+                newConfig.chart_type = "area"; // Trasforma in "area"
+                newConfig.stackedOptions = { 
+                    plotOptions: { 
+                        area: { stacking: 'normal' } 
+                    } 
+                }; // Aggiunge lo stacking
+            } else {
+                newConfig.chart_type = validTypes.includes(target.value) 
+                    ? target.value 
+                    : "line";
+                
+                delete newConfig.stackedOptions; // Rimuove stacking se non è "areastacked"
+            }            
+
         } else {
             newConfig[field] = target.value;
         }
@@ -602,7 +630,7 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
     
             if (!updatedEntity.name || updatedEntity.name === updatedEntity.sensor) {
                 updatedEntity.name = newSensor;
-                console.log(`Nome del sensore aggiornato a: ${updatedEntity.name}`);
+                //console.log(`Nome del sensore aggiornato a: ${updatedEntity.name}`);
             }
         }
     
@@ -617,7 +645,8 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
     
             //console.log("Nuova query dopo FROM:", updatedEntity.query);
         }
-    
+        
+        //console.log("Nuova query:", updatedEntity.query);
         updatedEntity[field] = inputValue;
         newEntities[index] = updatedEntity;
     
@@ -626,11 +655,7 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
             this._fireConfigChanged(this._config);
         }
     
-        //if (target.tagName === "HA-COMBO-BOX" || target.tagName === "HA-SELECT") {
-        //    target.open = false;
-        //}
-    
-        console.log(`Campo "${field}" aggiornato con valore:`, inputValue);
+
     }
 
 
@@ -688,12 +713,13 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
       this._fireConfigChanged(newConfig);
   }
   
-    shouldUpdate(changedProps) {
+  shouldUpdate(changedProps) {
         //console.log("shouldUpdate chiamato. Stato _openCombos:", this._openCombos);
     
         if (this._forceRender) {
           //console.log("🔄 Forzato il rendering dopo aggiornamento sensore o unità di misura.");
           this._forceRender = false; // Resettiamo il flag dopo il rendering
+          this.requestUpdate();
           return true;
         }
     
@@ -774,12 +800,13 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
             .value=${this._config.chart_type || "line"}
             @selected=${this._valueChanged}
             @closed=${(e) => e.stopPropagation()}
-            style="margin-bottom:5px"
+            style="margin-bottom:15px"
           >
             <mwc-list-item value="line">Line</mwc-list-item>
             <mwc-list-item value="spline">Spline</mwc-list-item>
             <mwc-list-item value="area">Area</mwc-list-item>
             <mwc-list-item value="areaspline">Area Spline</mwc-list-item>
+            <mwc-list-item value="areastacked">Area Stacked</mwc-list-item>
             <mwc-list-item value="bar">Bar</mwc-list-item>
             <mwc-list-item value="column">Column</mwc-list-item>
           </ha-select>
@@ -817,7 +844,7 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
               ></ha-textfield>
               
               <ha-textfield
-                label="Update Interval (ms)"
+                label="Update Interval (s)"
                 data-field="update_interval"
                 .value=${this._config.update_interval || ""}
                 @input=${this._valueChanged}
@@ -826,7 +853,7 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
               <label class="mdc-text-field mdc-text-field--outlined mdc-text-field--textarea" >
                 <span class="mdc-notched-outline">
                   <span class="mdc-notched-outline__leading"></span>
-                  <span class="mdc-floating-label">Highcharts series options <small><a href="https://api.highcharts.com/highcharts/series" TARGET="BLANK">API here</a></small></span>
+                  <span class="mdc-floating-label">Highcharts CHART options <small><a href="https://api.highcharts.com/highcharts" TARGET="BLANK">API here</a></small></span>
                   <span class="mdc-notched-outline__trailing"></span>
                 </span>
                 <span class="mdc-text-field__resizer">
