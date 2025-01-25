@@ -68,6 +68,20 @@ homeassistant:
 
 After adding it as a resource, open the **Lovelace UI** → **Overview** → **Edit Dashboard** → **Add Card** → find **“Timeseries High Influx Card”**. Configure it via the UI editor or through YAML.
 
+### Performance improvements
+While HAHIGH can be installed as a lovelace resource, some functionality will benefit greatly from it being installed as a frontend module instead.
+
+To do that, add the following to your configuration.yaml file and restart Home Assistant:
+
+```
+frontend:
+  extra_module_url:
+    - /local/timeseries-highinflux-card.js
+```
+    
+You'll need to adjust that path according to where you have installed timeseries-highinflux-card.js. 
+
+
 ## Example Configuration
 
 Minimal configuration:
