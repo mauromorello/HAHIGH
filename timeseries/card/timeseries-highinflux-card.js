@@ -1,5 +1,4 @@
-
-const version = "0.8.3"; //Stacked and percentage area
+const version = "0.8.4"; //Tab oprions
 
 /********************************************************
  * Import LitElement libraries (version 2.4.0)
@@ -245,8 +244,8 @@ class TimeseriesHighInfluxCard extends LitElement {
    */
 
     
-    async _loadHighcharts() {
-      return new Promise((resolve, reject) => {
+  async _loadHighcharts() {
+    return new Promise((resolve, reject) => {
         // Se Highcharts è già caricato, risolvi subito
         if (window.Highcharts) {
           resolve();
@@ -280,7 +279,7 @@ class TimeseriesHighInfluxCard extends LitElement {
         // Assicuriamoci che altre chiamate aspettino questo caricamento
         window._highchartsLoading.then(resolve).catch(reject);
       });
-    }
+  }
 
   
 
@@ -419,11 +418,22 @@ class TimeseriesHighInfluxCard extends LitElement {
     
       const container = this.shadowRoot.getElementById("chartContainer");
       if (!container) return;
+      
+      // Mappa delle conversioni personalizzate
+      const chartTypeMap = {
+          "areastacked": "area",
+          "areastackedpercent": "area",
+          "barstacked": "bar",
+          "columnstacked": "column"
+      };
+
+      // Se il valore esiste nella mappa, usa la versione corretta, altrimenti lascia invariato
+      const chartType = chartTypeMap[this._config.chart_type] || this._config.chart_type;
     
       // Opzioni base
       const baseOptions = {
         chart: {
-          type: this._config.chart_type || "line",
+          type: chartType || "line",
           zooming: { type: "xy" }
         },
         tooltip: {
@@ -499,11 +509,17 @@ window.customCards.push({
 class TimeseriesHighInfluxCardEditor extends LitElement {
     
     static get properties() {
-    return {
-      hass: {},
-      _config: {}
-    };
-  }
+      return {
+        hass: {},
+        activeTab: { type: String },
+        _config: {}
+      };
+    }
+    
+    constructor() {
+      super();
+      this.activeTab = "series"; // Tab iniziale
+    }
 
     setConfig(config) {
       
@@ -542,24 +558,41 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
         } else if (field === "update_interval") {
             newConfig.update_interval = parseInt(target.value, 10) || 60;
         } else if (field === "chart_type") {
-            //const validTypes = ["line", "spline", "area", "areaspline", "bar", "column"];
-
-            const validTypes = ["line", "spline", "area", "areaspline", "bar", "column"];
+            const validTypes = ["line", "spline", "area", "areaspline", "bar", "column", "areastacked", "areastackedpercent"];
+    
+            // Mantieni il valore selezionato nella select
+            newConfig.chart_type = validTypes.includes(target.value) ? target.value : "line";
+    
+            // Mappa delle opzioni di stacking per diversi tipi di grafico
+            const stackedOptionsMap = {
+                "areastacked": {
+                    plotOptions: {
+                        area: { stacking: "normal" }
+                    }
+                },
+                "areastackedpercent": {
+                    plotOptions: {
+                        area: { stacking: "percent" }
+                    }
+                },
+                "barstacked": {
+                    plotOptions: {
+                        bar: { stacking: "normal" }
+                    }
+                },
+                "columnstacked": {
+                    plotOptions: {
+                        column: { stacking: "normal" }
+                    }
+                }
+            };
             
-            if (target.value === "areastacked") {
-                newConfig.chart_type = "area"; // Trasforma in "area"
-                newConfig.stackedOptions = { 
-                    plotOptions: { 
-                        area: { stacking: 'normal' } 
-                    } 
-                }; // Aggiunge lo stacking
+            // Se il valore esiste nella mappa, assegna le relative opzioni di stacking, altrimenti rimuovi lo stacking
+            if (stackedOptionsMap[target.value]) {
+                newConfig.stackedOptions = stackedOptionsMap[target.value];
             } else {
-                newConfig.chart_type = validTypes.includes(target.value) 
-                    ? target.value 
-                    : "line";
-                
-                delete newConfig.stackedOptions; // Rimuove stacking se non è "areastacked"
-            }            
+                delete newConfig.stackedOptions;
+            }
 
         } else {
             newConfig[field] = target.value;
@@ -570,6 +603,7 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
             this._fireConfigChanged(newConfig);
         }
     }
+
     
     // Gestisce i cambiamenti nei parametri per ogni entità
     _entityValueChanged(ev) {
@@ -658,404 +692,400 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
 
     }
 
-
-
-
-
-
-  // Add a new blank entity
-  _addEntity() {
-    if (!this._config) return;
-    const newEntities = [...(this._config.entities || [])];
-    // Example of a "blank" entity
-    newEntities.push({ name: "temperature", color: "", query: "SELECT mean(\"value\")  FROM \"°C\" \r\n WHERE (\"entity_id\" = 'temperature') AND time > now() - 90d \r\n GROUP BY time(1d) fill(null)", unita_misura: "°C", sensor: "temperature" });
-
-    const newConfig = { ...this._config, entities: newEntities };
-    this._config = newConfig;
-    this._fireConfigChanged(newConfig);
-  }
-
-  // Remove the entity at the given index
-  _removeEntity(index) {
-    if (!this._config) return;
-    const newEntities = [...this._config.entities];
-    newEntities.splice(index, 1);
-
-    const newConfig = { ...this._config, entities: newEntities };
-    this._config = newConfig;
-    this._fireConfigChanged(newConfig);
-  }
-
-  // Dispatch config-changed event to notify Lovelace
-  _fireConfigChanged(newConfig) {
-    this.dispatchEvent(
-      new CustomEvent("config-changed", {
-        detail: { config: newConfig },
-        bubbles: true,
-        composed: true
-      })
-    );
-  }
-
-  _toggleEntityOptionsVisibility(index) {
-      if (!this._config || !this._config.entities[index]) return;
+    // Add a new blank entity
+    _addEntity() {
+      if (!this._config) return;
+      const newEntities = [...(this._config.entities || [])];
+      // Example of a "blank" entity
+      newEntities.push({ name: "temperature", color: "", query: "SELECT mean(\"value\")  FROM \"°C\" \r\n WHERE (\"entity_id\" = 'temperature') AND time > now() - 90d \r\n GROUP BY time(1d) fill(null)", unita_misura: "°C", sensor: "temperature" });
   
-      // Creiamo una nuova copia delle entità con lo stato aggiornato
-      const newEntities = [...this._config.entities];
-      newEntities[index] = {
-          ...newEntities[index],
-          isEntityOptionsVisible: !newEntities[index].isEntityOptionsVisible // Inverti lo stato attuale
-      };
-  
-      // Aggiorniamo la configurazione
       const newConfig = { ...this._config, entities: newEntities };
       this._config = newConfig;
       this._fireConfigChanged(newConfig);
-  }
+    }
   
-  shouldUpdate(changedProps) {
-        //console.log("shouldUpdate chiamato. Stato _openCombos:", this._openCombos);
-    
-        if (this._forceRender) {
-          //console.log("🔄 Forzato il rendering dopo aggiornamento sensore o unità di misura.");
-          this._forceRender = false; // Resettiamo il flag dopo il rendering
-          this.requestUpdate();
-          return true;
-        }
-    
-        // 🔹 Se `_openCombos` è undefined, non bloccare il rendering
-        if (!this._openCombos || Object.keys(this._openCombos).length === 0) {
-        //    console.log("shouldUpdate: Nessun combobox aperto, rendering consentito.");
-            return true;
-        }
-    
-        // 🔹 Se almeno un combobox è aperto, blocca il rendering
-        if (Object.values(this._openCombos).some(isOpen => isOpen)) {
-            //console.log("Bloccato il rendering: almeno un combobox è aperto");
-            return false;
-        }
-    
-        //console.log("shouldUpdate: Tutti i combobox chiusi, rendering consentito.");
-        return true;
+    // Remove the entity at the given index
+    _removeEntity(index) {
+      if (!this._config) return;
+      const newEntities = [...this._config.entities];
+      newEntities.splice(index, 1);
+  
+      const newConfig = { ...this._config, entities: newEntities };
+      this._config = newConfig;
+      this._fireConfigChanged(newConfig);
+    }
+  
+    // Dispatch config-changed event to notify Lovelace
+    _fireConfigChanged(newConfig) {
+      this.dispatchEvent(
+        new CustomEvent("config-changed", {
+          detail: { config: newConfig },
+          bubbles: true,
+          composed: true
+        })
+      );
     }
 
-  render() {
-    if (!this._config) return html``;
-    //console.log("Rendering....");
+    _toggleEntityOptionsVisibility(index) {
+        if (!this._config || !this._config.entities[index]) return;
     
+        // Creiamo una nuova copia delle entità con lo stato aggiornato
+        const newEntities = [...this._config.entities];
+        newEntities[index] = {
+            ...newEntities[index],
+            isEntityOptionsVisible: !newEntities[index].isEntityOptionsVisible // Inverti lo stato attuale
+        };
     
-    return html`
-      <div class="card-config">
-        <div class="section">
-          <ha-textfield
-            label="Title"
-            data-field="title"
-            .value=${this._config.title || ""}
-            @input=${this._valueChanged}
-          ></ha-textfield>
-          
-    
-        </div>
+        // Aggiorniamo la configurazione
+        const newConfig = { ...this._config, entities: newEntities };
+        this._config = newConfig;
+        this._fireConfigChanged(newConfig);
+    }
+  
+    shouldUpdate(changedProps) {
+          //console.log("shouldUpdate chiamato. Stato _openCombos:", this._openCombos);
+      
+          if (this._forceRender) {
+            //console.log("🔄 Forzato il rendering dopo aggiornamento sensore o unità di misura.");
+            this._forceRender = false; // Resettiamo il flag dopo il rendering
+            this.requestUpdate();
+            return true;
+          }
+      
+          // 🔹 Se `_openCombos` è undefined, non bloccare il rendering
+          if (!this._openCombos || Object.keys(this._openCombos).length === 0) {
+          //    console.log("shouldUpdate: Nessun combobox aperto, rendering consentito.");
+              return true;
+          }
+      
+          // 🔹 Se almeno un combobox è aperto, blocca il rendering
+          if (Object.values(this._openCombos).some(isOpen => isOpen)) {
+              //console.log("Bloccato il rendering: almeno un combobox è aperto");
+              return false;
+          }
+      
+          //console.log("shouldUpdate: Tutti i combobox chiusi, rendering consentito.");
+          return true;
+      }
+
+    // THE BIG RENDER *******************************************************************************************
+    render() {
+      if (!this._config) return html``;
+      //console.log("Rendering....");
+      
+      
+      return html`
+        <div class="card-config">
         
-          <ha-formfield label="Enable configuration options">
-            <ha-switch
-              data-field="showConfigurationOptions"
-              @change=${this._toggleConfigurationVisibility}
-            ></ha-switch>
-          </ha-formfield>
+          <div class="tabs">
+            <mwc-button @click=${() => this.activeTab = "series"} ?raised=${this.activeTab === "series"}>Series</mwc-button>
+            <mwc-button @click=${() => this.activeTab = "graph"} ?raised=${this.activeTab === "graph"}>Graph</mwc-button>
+            <mwc-button @click=${() => this.activeTab = "config"} ?raised=${this.activeTab === "config"}>Config</mwc-button>
+          </div>
 
-        <div class="section" style="display:${this.isConfigurationVisible ?  `block` :  `none`}">
-          <ha-textfield
-            label="Influx URL"
-            data-field="influx_url"
-            .value=${this._config.influx_url || ""}
-            @input=${this._valueChanged}
-          ></ha-textfield>
-          <ha-textfield
-            label="Database"
-            data-field="influx_db"
-            .value=${this._config.influx_db || ""}
-            @input=${this._valueChanged}
-          ></ha-textfield>
-          <ha-textfield
-            label="User"
-            data-field="influx_user"
-            .value=${this._config.influx_user || ""}
-            @input=${this._valueChanged}
-          ></ha-textfield>
-          <ha-textfield
-            label="Password"
-            data-field="influx_password"
-            .value=${this._config.influx_password || ""}
-            @input=${this._valueChanged}
-            type="password"
-          ></ha-textfield>
-        </div>
-
-        <!-- Chart type selection -->
-        <div class="section">
-          <ha-select
-            label="Chart Type"
-            data-field="chart_type"
-            .value=${this._config.chart_type || "line"}
-            @selected=${this._valueChanged}
-            @closed=${(e) => e.stopPropagation()}
-            style="margin-bottom:15px"
-          >
-            <mwc-list-item value="line">Line</mwc-list-item>
-            <mwc-list-item value="spline">Spline</mwc-list-item>
-            <mwc-list-item value="area">Area</mwc-list-item>
-            <mwc-list-item value="areaspline">Area Spline</mwc-list-item>
-            <mwc-list-item value="areastacked">Area Stacked</mwc-list-item>
-            <mwc-list-item value="bar">Bar</mwc-list-item>
-            <mwc-list-item value="column">Column</mwc-list-item>
-          </ha-select>
-
-          <ha-textfield
-            label="Chart Height (e.g. 300px)"
-            data-field="chart_height"
-            .value=${this._config.chart_height || ""}
-            @input=${this._valueChanged}
-          ></ha-textfield>
-
-          <ha-formfield label="Show legend">
-            <ha-switch
-              data-field="legend"
-              .checked=${this._config.legend === true}
-              @change=${this._valueChanged}
-            ></ha-switch>
-          </ha-formfield>
-          
-          <br>
-          <ha-formfield label="Enable advanced options" style="margin-bottom:10px;">
-            <ha-switch
-              data-field="showChartOptions"
-              @change=${this._toggleOptionsVisibility}
-            ></ha-switch>
-          </ha-formfield>
-
-          <div style="display:${this.isOptionsVisible ?  `block` :  `none`}">
-          
-              <ha-textfield
-                label="Max Y"
-                data-field="max_y"
-                .value=${this._config.max_y || ""}
-                @input=${this._valueChanged}
-              ></ha-textfield>
-              
-              <ha-textfield
-                label="Update Interval (s)"
-                data-field="update_interval"
-                .value=${this._config.update_interval || ""}
-                @input=${this._valueChanged}
-              ></ha-textfield>
-              
-              <label class="mdc-text-field mdc-text-field--outlined mdc-text-field--textarea" >
-                <span class="mdc-notched-outline">
-                  <span class="mdc-notched-outline__leading"></span>
-                  <span class="mdc-floating-label">Highcharts CHART options <small><a href="https://api.highcharts.com/highcharts" TARGET="BLANK">API here</a></small></span>
-                  <span class="mdc-notched-outline__trailing"></span>
-                </span>
-                <span class="mdc-text-field__resizer">
-                  <textarea
-                    class="mdc-text-field__input"
-                    spellcheck="false"
-                    rows="8"
-                    cols="40"
-                    style="width:100% !important;"
-                    aria-label="Root Chart Options"
-                    data-field="chart_options"
-                    @input=${this._valueChanged}
-                  >${this._config.chart_options || "{}"}</textarea>
-                </span>
-              </label>
-            </div>    
-        </div>
-
-        <!-- Multiple entities configuration -->
-        
-        <div class="entities section">
-          <h4>Entities</h4>
-          ${this._config.entities.map((ent, index) => html`
-            <div class="entity">
-              
-              
-            <ha-combo-box
-              label="Entity"
-              .value=${ent.sensor?.startsWith("sensor.") ? ent.sensor : `sensor.${ent.sensor || ""}`}
-              data-field="sensor"
-              data-index=${index}
-              .items=${this._entities.map(entity => ({ value: entity, label: entity }))}
+          <div class="section" style="display: ${this.activeTab === "config" ? "block" : "none"};">
+            <h4>Database Configuration</h4>
+            <ha-textfield
+              label="Influx URL"
+              data-field="influx_url"
+              .value=${this._config.influx_url || ""}
+              @input=${this._valueChanged}
+            ></ha-textfield>
+            <ha-textfield
+              label="Database"
+              data-field="influx_db"
+              .value=${this._config.influx_db || ""}
+              @input=${this._valueChanged}
+            ></ha-textfield>
+            <ha-textfield
+              label="User"
+              data-field="influx_user"
+              .value=${this._config.influx_user || ""}
+              @input=${this._valueChanged}
+            ></ha-textfield>
+            <ha-textfield
+              label="Password"
+              data-field="influx_password"
+              .value=${this._config.influx_password || ""}
+              @input=${this._valueChanged}
+              type="password"
+            ></ha-textfield>
+          </div>
+  
+          <!-- Chart type selection -->
+          <div class="section" style="display: ${this.activeTab === "graph" ? "block" : "none"};">
+                
+            <h4>Global chart options</h4>
             
-              @focusin=${() => { 
-                  if (!this._openCombos) this._openCombos = {}; 
-                  this._openCombos[index] = true; 
-                  //console.log(`Combo aperto su index ${index}:`, this._openCombos);
-                  this.requestUpdate(); 
-              }}
-              @focusout=${() => { 
-                  if (this._openCombos) { 
-                      delete this._openCombos[index]; 
-                  }
-                  //console.log(`Combo chiuso su index ${index}:`, this._openCombos);
-                  this.requestUpdate(); 
-              }}
-            
-              @value-changed=${this._entityValueChanged}
+            <ha-textfield
+              label="Title"
+              data-field="title"
+              .value=${this._config.title || ""}
+              @input=${this._valueChanged}
+            ></ha-textfield>
+
+          
+            <ha-select
+              label="Chart Type"
+              data-field="chart_type"
+              .value=${this._config.chart_type || "line"}
+              @selected=${this._valueChanged}
+              @closed=${(e) => e.stopPropagation()}
+              style="margin-bottom:15px"
             >
-            </ha-combo-box>
-
-
-
-              
-              <ha-textfield
-                label="Unit of measure"
-                .value=${ent.unita_misura || ""}
-                data-field="unita_misura"
+              <mwc-list-item value="line">Line</mwc-list-item>
+              <mwc-list-item value="spline">Spline</mwc-list-item>
+              <mwc-list-item value="area">Area</mwc-list-item>
+              <mwc-list-item value="areaspline">Area Spline</mwc-list-item>
+              <mwc-list-item value="areastacked">Area Stacked</mwc-list-item>
+              <mwc-list-item value="areastackedpercent">Area Stacked %</mwc-list-item>
+              <mwc-list-item value="bar">Bar</mwc-list-item>
+              <mwc-list-item value="column">Column</mwc-list-item>
+            </ha-select>
+  
+            <ha-textfield
+              label="Chart Height (e.g. 300px)"
+              data-field="chart_height"
+              .value=${this._config.chart_height || ""}
+              @input=${this._valueChanged}
+            ></ha-textfield>
+  
+            <ha-formfield label="Show legend">
+              <ha-switch
+                data-field="legend"
+                .checked=${this._config.legend === true}
+                @change=${this._valueChanged}
+              ></ha-switch>
+            </ha-formfield>
+            
+            <br>
+            <ha-formfield label="Enable advanced options" style="margin-bottom:10px;">
+              <ha-switch
+                data-field="showChartOptions"
+                @change=${this._toggleOptionsVisibility}
+              ></ha-switch>
+            </ha-formfield>
+  
+            <div style="display:${this.isOptionsVisible ?  `block` :  `none`}">
+            
+                <ha-textfield
+                  label="Max Y"
+                  data-field="max_y"
+                  .value=${this._config.max_y || ""}
+                  @input=${this._valueChanged}
+                ></ha-textfield>
+                
+                <ha-textfield
+                  label="Update Interval (s)"
+                  data-field="update_interval"
+                  .value=${this._config.update_interval || ""}
+                  @input=${this._valueChanged}
+                ></ha-textfield>
+                
+                <label class="mdc-text-field mdc-text-field--outlined mdc-text-field--textarea" >
+                  <span class="mdc-notched-outline">
+                    <span class="mdc-notched-outline__leading"></span>
+                    <span class="mdc-floating-label">Highcharts CHART options <small><a href="https://api.highcharts.com/highcharts" TARGET="BLANK">API here</a></small></span>
+                    <span class="mdc-notched-outline__trailing"></span>
+                  </span>
+                  <span class="mdc-text-field__resizer">
+                    <textarea
+                      class="mdc-text-field__input"
+                      spellcheck="false"
+                      rows="8"
+                      cols="40"
+                      style="width:100% !important;"
+                      aria-label="Root Chart Options"
+                      data-field="chart_options"
+                      @input=${this._valueChanged}
+                    >${this._config.chart_options || "{}"}</textarea>
+                  </span>
+                </label>
+              </div>    
+          </div>
+  
+          <!-- Multiple entities configuration -->
+          <div class="entities section" style="display: ${this.activeTab === "series" ? "block" : "none"};">
+            <h4>Entities</h4>
+            ${this._config.entities.map((ent, index) => html`
+              <div class="entity">
+                
+                
+              <ha-combo-box
+                label="Entity"
+                .value=${ent.sensor?.startsWith("sensor.") ? ent.sensor : `sensor.${ent.sensor || ""}`}
+                data-field="sensor"
                 data-index=${index}
-                @input=${this._entityValueChanged}
-              ></ha-textfield>
+                .items=${this._entities.map(entity => ({ value: entity, label: entity }))}
               
-              <!-- Switch per attivare/disattivare il div secondario -->
-              <ha-formfield label="Show advanced options" style="margin-bottom:10px;">
-                <ha-switch
-                  .checked=${ent.isEntityOptionsVisible || false}
+                @focusin=${() => { 
+                    if (!this._openCombos) this._openCombos = {}; 
+                    this._openCombos[index] = true; 
+                    //console.log(`Combo aperto su index ${index}:`, this._openCombos);
+                    this.requestUpdate(); 
+                }}
+                @focusout=${() => { 
+                    if (this._openCombos) { 
+                        delete this._openCombos[index]; 
+                    }
+                    //console.log(`Combo chiuso su index ${index}:`, this._openCombos);
+                    this.requestUpdate(); 
+                }}
+              
+                @value-changed=${(ev) => {
+                    this._entityValueChanged(ev);
+                    ev.target.blur(); // 🔹 Forza la perdita del focus
+                }}
+                              >
+              </ha-combo-box>
+                
+                <ha-textfield
+                  label="Unit of measure"
+                  .value=${ent.unita_misura || ""}
+                  data-field="unita_misura"
                   data-index=${index}
-                  @change=${() => this._toggleEntityOptionsVisibility(index)}
-                ></ha-switch>
-              </ha-formfield>
-              
-              <div style="display:${ent.isEntityOptionsVisible ? `block` : `none`};">
-                  <ha-textfield
-                    label="Entity Name"
-                    .value=${ent.name || ""}
-                    data-field="name"
+                  @input=${this._entityValueChanged}
+                ></ha-textfield>
+                
+                <!-- Switch per attivare/disattivare il div secondario -->
+                <ha-formfield label="Show advanced options" style="margin-bottom:10px;">
+                  <ha-switch
+                    .checked=${ent.isEntityOptionsVisible || false}
                     data-index=${index}
-                    @input=${this._entityValueChanged}
-                  ></ha-textfield>
-                  
-                  <ha-textfield
-                    label="Color"
-                    .value=${ent.color || ""}
-                    data-field="color"
-                    data-index=${index}
-                    @input=${this._entityValueChanged}
-                  ></ha-textfield>
-    
-                    <label class="mdc-text-field mdc-text-field--outlined mdc-text-field--textarea">
-                      <span class="mdc-notched-outline">
-                        <span class="mdc-notched-outline__leading"></span>
-                        <span class="mdc-floating-label">Influx Query</span>
-                        <span class="mdc-notched-outline__trailing"></span>
-                      </span>
-                      <span class="mdc-text-field__resizer">
-                        <textarea
-                          class="mdc-text-field__input"
-                          spellcheck="false"
-                          rows="8"
-                          cols="40"
-                          style="width:100% !important;"
-                          aria-label="Influx Query"
-                          data-field="query"
-                          data-index=${index}
-                          @input=${this._entityValueChanged}
-                        >${ent.query ||"SELECT mean(\"value\")  FROM \"°C\" \r\n WHERE (\"entity_id\" = 'temperature') AND time > now() - 90d \r\n GROUP BY time(1d) fill(null)"}
-                        </textarea>
-                      </span>
-                    </label>
+                    @change=${() => this._toggleEntityOptionsVisibility(index)}
+                  ></ha-switch>
+                </ha-formfield>
+                
+                <div style="display:${ent.isEntityOptionsVisible ? `block` : `none`};">
+                    <ha-textfield
+                      label="Entity Name"
+                      .value=${ent.name || ""}
+                      data-field="name"
+                      data-index=${index}
+                      @input=${this._entityValueChanged}
+                    ></ha-textfield>
                     
-                    
-                    <label class="mdc-text-field mdc-text-field--outlined mdc-text-field--textarea" >
-                      <span class="mdc-notched-outline">
-                        <span class="mdc-notched-outline__leading"></span>
-                        <span class="mdc-floating-label">Highcharts series options <small><a href="https://api.highcharts.com/highcharts/series" TARGET="BLANK">API here</a></small></span>
-                        <span class="mdc-notched-outline__trailing"></span>
-                      </span>
-                      <span class="mdc-text-field__resizer">
-                        <textarea
-                          class="mdc-text-field__input"
-                          spellcheck="false"
-                          rows="8"
-                          cols="40"
-                          style="width:100% !important;"
-                          aria-label="Options"
-                          data-field="options"
-                          data-index=${index}
-                          @input=${this._entityValueChanged}
-                        >${ent.options || "{}"}</textarea>
-                      </span>
-                    </label>
-                </div>
-              <mwc-icon-button
-                class="delete-button"
-                @click=${() => this._removeEntity(index)}
-              >
-                <ha-icon icon="hass:delete"></ha-icon>
-              </mwc-icon-button>
-            </div>
-          `)}
-          <mwc-button raised label="Add entity" @click=${this._addEntity}>
-            <ha-icon icon="hass:plus"></ha-icon>
-          </mwc-button>
-          
-
-          
+                    <ha-textfield
+                      label="Color"
+                      .value=${ent.color || ""}
+                      data-field="color"
+                      data-index=${index}
+                      @input=${this._entityValueChanged}
+                    ></ha-textfield>
+      
+                      <label class="mdc-text-field mdc-text-field--outlined mdc-text-field--textarea">
+                        <span class="mdc-notched-outline">
+                          <span class="mdc-notched-outline__leading"></span>
+                          <span class="mdc-floating-label">Influx Query</span>
+                          <span class="mdc-notched-outline__trailing"></span>
+                        </span>
+                        <span class="mdc-text-field__resizer">
+                          <textarea
+                            class="mdc-text-field__input"
+                            spellcheck="false"
+                            rows="8"
+                            cols="40"
+                            style="width:100% !important;"
+                            aria-label="Influx Query"
+                            data-field="query"
+                            data-index=${index}
+                            @input=${this._entityValueChanged}
+                          >${ent.query ||"SELECT mean(\"value\")  FROM \"°C\" \r\n WHERE (\"entity_id\" = 'temperature') AND time > now() - 90d \r\n GROUP BY time(1d) fill(null)"}
+                          </textarea>
+                        </span>
+                      </label>
+                      
+                      
+                      <label class="mdc-text-field mdc-text-field--outlined mdc-text-field--textarea" >
+                        <span class="mdc-notched-outline">
+                          <span class="mdc-notched-outline__leading"></span>
+                          <span class="mdc-floating-label">Highcharts series options <small><a href="https://api.highcharts.com/highcharts/series" TARGET="BLANK">API here</a></small></span>
+                          <span class="mdc-notched-outline__trailing"></span>
+                        </span>
+                        <span class="mdc-text-field__resizer">
+                          <textarea
+                            class="mdc-text-field__input"
+                            spellcheck="false"
+                            rows="8"
+                            cols="40"
+                            style="width:100% !important;"
+                            aria-label="Options"
+                            data-field="options"
+                            data-index=${index}
+                            @input=${this._entityValueChanged}
+                          >${ent.options || "{}"}</textarea>
+                        </span>
+                      </label>
+                  </div>
+                <mwc-icon-button
+                  class="delete-button"
+                  @click=${() => this._removeEntity(index)}
+                >
+                  <ha-icon icon="hass:delete"></ha-icon>
+                </mwc-icon-button>
+              </div>
+            `)}
+            <mwc-button raised label="Add entity" @click=${this._addEntity}>
+              <ha-icon icon="hass:plus"></ha-icon>
+            </mwc-button>
+            
+  
+            
+          </div>
         </div>
-      </div>
-    `;
+      `;
   }
 
-   
  
-  _toggleOptionsVisibility() { this.isOptionsVisible = !this.isOptionsVisible;  }
-  _toggleConfigurationVisibility() { this.isConfigurationVisible = !this.isConfigurationVisible;  }
+    _toggleOptionsVisibility() { this.isOptionsVisible = !this.isOptionsVisible;  }
 
-  static get styles() {
-    return css`
-      .card-config {
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-      }
-      .section {
-        border: 1px solid var(--primary-color);
-        padding: 16px;
-        border-radius: 8px;
-        background: var(--card-background-color);
-      }
-      .entities {
-        margin-top: 8px;
-      }
-      .entity {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        margin-bottom: 16px;
-        border: 1px dashed var(--secondary-text-color);
-        padding: 8px;
-        border-radius: 4px;
-      }
-      .delete-button {
-        align-self: flex-end;
-      }
-      mwc-button {
-        margin-top: 8px;
-      }
-      ha-textfield,
-      textarea {
-        display: block;
-        margin-bottom: 8px;
-      }
-      ha-formfield {
-        display: block;
-        margin-top: 8px;
-      }
-      .entity-picker {
-        min-height: 40px;
-        display: block;
-      }
-      `;  // ✅ Corretta chiusura del template literal con backtick
-  }
+
+    static get styles() {
+      return css`
+        .card-config {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+        .section {
+          border: 1px solid var(--primary-color);
+          padding: 16px;
+          border-radius: 8px;
+          background: var(--card-background-color);
+        }
+        .entities {
+          margin-top: 8px;
+        }
+        .entity {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          margin-bottom: 16px;
+          border: 1px dashed var(--secondary-text-color);
+          padding: 8px;
+          border-radius: 4px;
+        }
+        .delete-button {
+          align-self: flex-end;
+        }
+        mwc-button {
+          margin-top: 8px;
+        }
+        ha-textfield,
+        textarea {
+          display: block;
+          margin-bottom: 8px;
+        }
+        ha-formfield {
+          display: block;
+          margin-top: 8px;
+        }
+        .entity-picker {
+          min-height: 40px;
+          display: block;
+        }
+        `;  // ✅ Corretta chiusura del template literal con backtick
+    }
 }
 
 /**
