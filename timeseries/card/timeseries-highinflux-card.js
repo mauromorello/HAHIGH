@@ -1,4 +1,4 @@
-const version = "0.8.4"; //Tab oprions
+const version = "0.8.5"; //Selector (Highstock)
 
 /********************************************************
  * Import LitElement libraries (version 2.4.0)
@@ -109,12 +109,10 @@ class TimeseriesHighInfluxCard extends LitElement {
    */  
     updated(changedProps) {
       if (changedProps.has("hass")) {
-        //console.log("hass.states:", this.hass.states); // Debug completo
     
         this._entities = Object.keys(this.hass.states).filter(
           (e) => e.startsWith("sensor.") // Recupera solo i sensori
         );
-        //console.log("Updated entities FROM UPDATE:"); // Debug
         
       }
     }
@@ -126,11 +124,9 @@ class TimeseriesHighInfluxCard extends LitElement {
    */
     set hass(hass) {
         if (!hass) {
-            console.warn("⚠️ `hass` è undefined! Mantengo il valore precedente.");
             return;
         }
 
-        //console.log("📡 Ricevuto nuovo `hass`:", hass);
 
         // 🔹 Salviamo `hass` in una variabile statica globale
         TimeseriesHighInfluxCard._hassGlobal = hass;
@@ -150,7 +146,6 @@ class TimeseriesHighInfluxCard extends LitElement {
         }
 
         this._entities = newEntities;
-        //console.log("✅ Updated entities from SET HASS:", this._entities);
     }
 
 
@@ -208,11 +203,6 @@ class TimeseriesHighInfluxCard extends LitElement {
       });
     }
   
-    // 🔹 Forza il refresh della UI per visualizzare `ha-combo-box`
-    //setTimeout(() => {
-    //  console.log("Forcing UI refresh after first render.");
-    //  this.requestUpdate();
-    //}, 100);
   }
 
 
@@ -243,43 +233,46 @@ class TimeseriesHighInfluxCard extends LitElement {
    * Loads the Highcharts script from a CDN (if not already loaded).
    */
 
-    
+  
   async _loadHighcharts() {
-    return new Promise((resolve, reject) => {
-        // Se Highcharts è già caricato, risolvi subito
-        if (window.Highcharts) {
-          resolve();
-          return;
-        }
-    
-        // Se un altro script è in fase di caricamento, aspettiamo che finisca
-        if (window._highchartsLoading) {
-          window._highchartsLoading.then(resolve).catch(reject);
-          return;
-        }
-    
-        // Se lo script non è caricato e non è in fase di caricamento, lo carichiamo
-        window._highchartsLoading = new Promise((scriptResolve, scriptReject) => {
-          const script = document.createElement("script");
-          script.src = "https://code.highcharts.com/highcharts.js";
-          script.async = true;
-          script.onload = () => {
-            console.log("📈 HAHIGH " + version + "... go to graficare! 💃🏻");
-            scriptResolve();
-            resolve();
-          };
-          script.onerror = () => {
-            console.error("Error loading Highcharts");
-            scriptReject();
-            reject();
-          };
-          document.head.appendChild(script);
-        });
-    
-        // Assicuriamoci che altre chiamate aspettino questo caricamento
-        window._highchartsLoading.then(resolve).catch(reject);
+      return new Promise((resolve, reject) => {
+          // Se Highcharts è già caricato, risolvi subito
+          if (window.Highcharts) {
+              resolve();
+              return;
+          }
+  
+          // Se un altro script è in fase di caricamento, aspettiamo che finisca
+          if (window._highchartsLoading) {
+              window._highchartsLoading.then(resolve).catch(reject);
+              return;
+          }
+  
+          // Lista di script da caricare
+          // Se serve altro
+          const scripts = [
+
+              "https://code.highcharts.com/stock/highstock.js"
+          ];
+  
+          // Carica tutti gli script in parallelo
+          window._highchartsLoading = Promise.all(
+              scripts.map((src) => new Promise((scriptResolve, scriptReject) => {
+                  const script = document.createElement("script");
+                  script.src = src;
+                  script.async = true;
+                  script.onload = () => {
+                      scriptResolve();
+                  };
+                  script.onerror = () => {
+                      scriptReject();
+                  };
+                  document.head.appendChild(script);
+              }))
+          ).then(resolve).catch(reject);
       });
   }
+
 
   
 
@@ -291,7 +284,7 @@ class TimeseriesHighInfluxCard extends LitElement {
   async _fetchData() {
   const config = this._config;
   const entitiesDefined = Array.isArray(config.entities) && config.entities.length > 0;
-  //console.log("Fetching data... ", this.updateInterval * 1000);
+
 
   if (entitiesDefined) {
     // Multiple entities => multiple queries
@@ -324,13 +317,13 @@ class TimeseriesHighInfluxCard extends LitElement {
               const func = new Function("Highcharts", "return " + code);
               extraOptions = func(window.Highcharts);
             } catch (e) {
-              console.error("Impossibile interpretare options:", e);
+
               this._queryError = `Wrong chart options;`;
               extraOptions = {};
             }
  
           } catch (e) {
-            console.error(`Literal JS non valido in config.entities[${i}].options:`, e);
+
             this._queryError = `Configuration not valid in serie #${i};`;
             extraOptions = {};
           }
@@ -345,11 +338,11 @@ class TimeseriesHighInfluxCard extends LitElement {
         this._renderChart(chartSeries);
       }
     } catch (error) {
-      console.error("Error fetching data per una o più entities:", error);
+      this._queryError = `Error fetching data`;
     }
   } else {
     // Single-query mode
-    //  console.error("EX single query");
+    this._queryError = `Need to define at least 1 entity!`;
   }
 }
 
@@ -398,8 +391,7 @@ class TimeseriesHighInfluxCard extends LitElement {
           return { parsedData };
   
       } catch (error) {
-          console.error("❌ Errore durante la chiamata al database:", error);
-          this._queryError = `❌ Query error: ${error.message}`;
+          this._queryError = `Query error: ${error.message}`;
           this.requestUpdate();
           return { parsedData: [] };
       }
@@ -411,7 +403,7 @@ class TimeseriesHighInfluxCard extends LitElement {
    */
     _renderChart(seriesData) {
       if (!window.Highcharts) {
-        console.error("Highcharts not available, reloading the library...");
+
         this._loadHighcharts().then(() => this._renderChart(seriesData));
         return;
       }
@@ -466,15 +458,12 @@ class TimeseriesHighInfluxCard extends LitElement {
           const func = new Function("Highcharts", "return " + code);
           globalChartOptions = func(window.Highcharts);
         } catch (e) {
-          console.error("Impossibile interpretare chart_options:", e);
+          this._queryError = `Chart options wrong`;
           globalChartOptions = {};
         }
       }
     
-     //console.log("BASE OPTIONS: ", baseOptions);
-     //console.log("CHART OPTIONS: ", globalChartOptions);
-     //console.log("STACK OPTIONS: ", this._config.stackedOptions);
-    
+
       // Unisco le due parti prima di creare il grafico
       const finalOptions = Highcharts.merge(
           {},  // Un oggetto vuoto evita la modifica di baseOptions
@@ -483,10 +472,10 @@ class TimeseriesHighInfluxCard extends LitElement {
           globalChartOptions || {}  // Fusione chart_options
       );
 
-      //console.log("FINAL OPTIONS: ", finalOptions);
       
       // Creo il grafico con le opzioni finali
-      Highcharts.chart(container, finalOptions);
+      const chartFunction = this._config.selector ? Highcharts.stockChart : Highcharts.chart;
+      chartFunction(container, finalOptions);
     }
 }
 
@@ -525,13 +514,12 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
       
       this._config = { ...config, entities: config.entities || [] };
 
-      //console.log("📡 setConfig - Valore caricato da _config:", this._config?.entities);
       // 🔹 Se la configurazione non ha entità definite, usiamo quelle già trovate
       if (!this._entities || this._entities.length === 0) {
         this._entities = Object.keys(this.hass?.states || {}).filter(
           (e) => e.startsWith("sensor.")
         );
-        //console.log("Config set. Entities SET BY CONFIG available:");
+
       }
     
       
@@ -557,6 +545,10 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
             newConfig.max_y = target.value.trim() === "" ? null : parseFloat(target.value);
         } else if (field === "update_interval") {
             newConfig.update_interval = parseInt(target.value, 10) || 60;
+        } else if (field === "selector") {  
+            // ✅ Aggiunto supporto per "selector"
+            newConfig.selector = target.checked;  // Usa un ha-switch quindi target.checked
+    
         } else if (field === "chart_type") {
             const validTypes = ["line", "spline", "area", "areaspline", "bar", "column", "areastacked", "areastackedpercent"];
     
@@ -586,14 +578,14 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
                     }
                 }
             };
-            
+    
             // Se il valore esiste nella mappa, assegna le relative opzioni di stacking, altrimenti rimuovi lo stacking
             if (stackedOptionsMap[target.value]) {
                 newConfig.stackedOptions = stackedOptionsMap[target.value];
             } else {
                 delete newConfig.stackedOptions;
             }
-
+    
         } else {
             newConfig[field] = target.value;
         }
@@ -603,6 +595,7 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
             this._fireConfigChanged(newConfig);
         }
     }
+
 
     
     // Gestisce i cambiamenti nei parametri per ogni entità
@@ -624,19 +617,17 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
     
         // Se cambia il sensore, aggiorna la query e cerca l'unità di misura
         if (field === "sensor" && updatedEntity.query) {
-            //console.log("Query prima della sostituzione:", updatedEntity.query);
+
     
             updatedEntity.query = updatedEntity.query.replace(
                 /("entity_id"\s*=\s*)'([^']*)'/,
                 `$1'${newSensor}'`
             );
-    
-            //console.log("Nuova query dopo entity_id:", updatedEntity.query);
-    
+
             const hass = this._getHass();
     
             if (!hass || !hass.states) {
-                console.error("❌ ERRORE: `_hass` o `hass.states` è undefined.");
+                //console.error("❌ ERRORE: `_hass` o `hass.states` è undefined.");
             } else {
     
                 const sensorData = hass.states["sensor." + newSensor];
@@ -658,29 +649,26 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
                         this._forceRender = true; // 🔹 Attiviamo il rendering forzato
                     }
                 } else {
-                    console.warn(`⚠️ Il sensore ${newSensor} non è stato trovato in hass.states.`);
+                   this._queryError = `Sensor not found`;
                 }
             }
     
             if (!updatedEntity.name || updatedEntity.name === updatedEntity.sensor) {
                 updatedEntity.name = newSensor;
-                //console.log(`Nome del sensore aggiornato a: ${updatedEntity.name}`);
+                
             }
         }
     
         // Se viene modificata manualmente l'unità di misura, aggiorna solo la query
         if (field === "unita_misura" && updatedEntity.query) {
-            //console.log("Query prima della sostituzione del measurement:", updatedEntity.query);
     
             updatedEntity.query = updatedEntity.query.replace(
                 /FROM\s+"([^"]+)"/i,
                 `FROM "${inputValue}"`
             );
     
-            //console.log("Nuova query dopo FROM:", updatedEntity.query);
         }
         
-        //console.log("Nuova query:", updatedEntity.query);
         updatedEntity[field] = inputValue;
         newEntities[index] = updatedEntity;
     
@@ -743,10 +731,9 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
     }
   
     shouldUpdate(changedProps) {
-          //console.log("shouldUpdate chiamato. Stato _openCombos:", this._openCombos);
-      
+     
           if (this._forceRender) {
-            //console.log("🔄 Forzato il rendering dopo aggiornamento sensore o unità di misura.");
+
             this._forceRender = false; // Resettiamo il flag dopo il rendering
             this.requestUpdate();
             return true;
@@ -754,26 +741,22 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
       
           // 🔹 Se `_openCombos` è undefined, non bloccare il rendering
           if (!this._openCombos || Object.keys(this._openCombos).length === 0) {
-          //    console.log("shouldUpdate: Nessun combobox aperto, rendering consentito.");
               return true;
           }
       
           // 🔹 Se almeno un combobox è aperto, blocca il rendering
           if (Object.values(this._openCombos).some(isOpen => isOpen)) {
-              //console.log("Bloccato il rendering: almeno un combobox è aperto");
               return false;
           }
       
-          //console.log("shouldUpdate: Tutti i combobox chiusi, rendering consentito.");
+
           return true;
       }
 
     // THE BIG RENDER *******************************************************************************************
     render() {
       if (!this._config) return html``;
-      //console.log("Rendering....");
-      
-      
+
       return html`
         <div class="card-config">
         
@@ -849,6 +832,14 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
               .value=${this._config.chart_height || ""}
               @input=${this._valueChanged}
             ></ha-textfield>
+            
+            <ha-formfield label="Show Selector">
+              <ha-switch
+                data-field="selector"
+                .checked=${this._config.selector === true}
+                @change=${this._valueChanged}
+              ></ha-switch>
+            </ha-formfield>
   
             <ha-formfield label="Show legend">
               <ha-switch
@@ -921,14 +912,12 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
                 @focusin=${() => { 
                     if (!this._openCombos) this._openCombos = {}; 
                     this._openCombos[index] = true; 
-                    //console.log(`Combo aperto su index ${index}:`, this._openCombos);
                     this.requestUpdate(); 
                 }}
                 @focusout=${() => { 
                     if (this._openCombos) { 
                         delete this._openCombos[index]; 
                     }
-                    //console.log(`Combo chiuso su index ${index}:`, this._openCombos);
                     this.requestUpdate(); 
                 }}
               
