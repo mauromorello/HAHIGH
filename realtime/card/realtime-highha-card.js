@@ -1,4 +1,4 @@
-const version = "0.1.3"; //Setting up...
+const version = "0.1.4"; //Config start
 
 /********************************************************
  * Import LitElement libraries (version 2.4.0)
@@ -164,7 +164,6 @@ class RealtimeHighHaCard extends LitElement {
           const scripts = [
               "https://code.highcharts.com/highcharts.js",
               "https://code.highcharts.com/highcharts-more.js",
-              "https://code.highcharts.com/modules/bullet.js",
               "https://code.highcharts.com/modules/solid-gauge.js",
           ];
   
@@ -234,149 +233,154 @@ class RealtimeHighHaCard extends LitElement {
       }, interval * 1000);
   }
 
-  _updateData(source = "unknown") {  // 🔹 Aggiunto parametro `source`
-      if (!this._hass || !this._chart) return;
-  
-      const entityId = this._config.entity?.[0] || "";
-      const stateObj = this._hass.states[entityId];
-      if (!stateObj) return;
-  
-      const val = parseFloat(stateObj.state);
-      if (isNaN(val)) return;
-  
-      console.log(`📊 Nuovo dato al grafico: ${val} (da: ${entityId}, origine: ${source})`);
-  
-      const now = new Date();
-      const localTime = now.getTime() - now.getTimezoneOffset() * 60000;
-      const keep = this._config.chart?.data_kept || 120;
-  
-      this._chart.series[0].addPoint([localTime, val], true, this._chart.series[0].data.length >= keep);
-  }
-
-
-  _renderChart(seriesData) {
-    console.log("⚙️ _renderChart called with data:", seriesData, "and config:", this._config);
+    _updateData(source = "unknown") {  
+        if (!this._hass || !this._chart || !this._config.entity) return;
     
-    if (!seriesData || seriesData.length === 0) {
-      // Almeno una serie "vuota" per evitare errori
-      seriesData = [{
-        name: "My Sensor",
-        data: []
-      }];
+        const now = new Date();
+        const localTime = now.getTime() - now.getTimezoneOffset() * 60000;
+        const keep = this._config.chart?.data_kept || 120;
+    
+        this._config.entity.forEach((entityId, index) => {
+            const stateObj = this._hass.states[entityId];
+            if (!stateObj) return;
+    
+            const val = parseFloat(stateObj.state);
+            if (isNaN(val)) return;
+    
+            console.log(`📊 Nuovo dato per ${entityId}: ${val} (Origine: ${source})`);
+    
+            // Verifica che la serie esista prima di aggiornarla
+            if (this._chart.series[index]) {
+                this._chart.series[index].addPoint(
+                    [localTime, val], 
+                    true, 
+                    this._chart.series[index].data.length >= keep
+                );
+            } else {
+                console.warn(`❌ La serie per ${entityId} non esiste ancora!`);
+            }
+        });
+    }
+    
+    _getBaseChartOptions(chartType, seriesData) {
+        return {
+            chart: {
+                type: chartType,
+                zooming: { type: "xy" }
+            },
+            tooltip: {
+                valueDecimals: 1
+            },
+            legend: {
+                enabled: this._config.legend === true
+            },
+            credits: {
+                enabled: false
+            },
+            title: {
+                text: null
+            },
+            xAxis: {
+                type: "datetime"
+            },
+            yAxis: {
+                title: { text: null },
+                max: this._config.max_y !== undefined ? this._config.max_y : null
+            },
+            series: seriesData
+        };
     }
 
-    if (!window.Highcharts) {
-      this._loadHighcharts().then(() => this._renderChart(seriesData));
-      return;
+    _getTypeSpecificOptions(chartType) {
+        const options = {};
+    
+        switch (chartType) {
+            case "solidgauge":
+                options.chart = { type: "solidgauge" };
+                options.pane = { startAngle: -140, endAngle: 140 };
+                options.yAxis = { min: 0, max: 100, title: { text: null } };
+                options.legend = { enabled: false };
+                break;
+    
+            case "bullet":
+                options.chart = { type: "bullet" };
+                options.plotOptions = { series: { pointPadding: 0.25, groupPadding: 0 } };
+                break;
+    
+            case "pie":
+                options.chart = { type: "pie" };
+                delete options.xAxis;
+                delete options.yAxis;
+                break;
+    
+            default:
+                break;
+        }
+    
+        return options;
     }
-  
-    const container = this.shadowRoot.getElementById("chartContainer");
-    if (!container) return;
-  
-    // Se la config è in _config.chart, recuperiamo il type; altrimenti "line"
-    let chartType = (this._config.chart && this._config.chart.type) || "line";
-  
-    // Se hai ancora una mappa per i tipi "areastacked", "barstacked", ecc.
-    const chartTypeMap = {
-      "areastacked": "area",
-      "areastackedpercent": "area",
-      "barstacked": "bar",
-      "columnstacked": "column"
-    };
-    if (chartTypeMap[chartType]) {
-      chartType = chartTypeMap[chartType];
-    }
-  
-    // Opzioni base (per line/area/bar ecc.)
-    const baseOptions = {
-      chart: {
-        type: chartType,
-        zooming: { type: "xy" }
-      },
-      tooltip: {
-        valueDecimals: 1
-      },
-      legend: {
-        enabled: this._config.legend === true
-      },
-      credits: {
-        enabled: false
-      },
-      title: {
-        text: null
-      },
-      xAxis: {
-        type: "datetime"
-      },
-      yAxis: {
-        title: { text: null },
-        max: this._config.max_y !== undefined ? this._config.max_y : null
-      },
-      series: seriesData
-    };
-  
-    // Opzioni specifiche per gauge, bullet, pie ecc.
-    const typeSpecificOptions = {};
-  
-    switch (chartType) {
-      case "solidgauge":
-        typeSpecificOptions.chart = { type: "solidgauge" };
-        typeSpecificOptions.pane = { startAngle: -140, endAngle: 140 };
-        typeSpecificOptions.yAxis = {
-          min: 0,
-          max: 100,
-          title: { text: null }
+
+
+    _getChartType() {
+        let chartType = (this._config.chart && this._config.chart.type) || "line";
+    
+        const chartTypeMap = {
+            "areastacked": "area",
+            "areastackedpercent": "area",
+            "barstacked": "bar",
+            "columnstacked": "column"
         };
-        // Disabilitiamo la leggenda se vogliamo
-        typeSpecificOptions.legend = { enabled: false };
-        break;
-  
-      case "bullet":
-        typeSpecificOptions.chart = { type: "bullet" };
-        typeSpecificOptions.plotOptions = {
-          series: { pointPadding: 0.25, groupPadding: 0 }
-        };
-        break;
-  
-      case "pie":
-        typeSpecificOptions.chart = { type: "pie" };
-        delete baseOptions.xAxis;  // Non serve asse x
-        delete baseOptions.yAxis;  // Non serve asse y
-        break;
-  
-      // Altri case se occorrono
-      default:
-        break;
+    
+        return chartTypeMap[chartType] || chartType;
     }
-  
-    // Se l’utente ha definito opzioni stacking (areastacked, ecc.)
-    // e/o “chart_options” globali (custom code / JSON)
-    let globalChartOptions = {};
-    if (this._config.chart_options) {
-      try {
-        const code = this._config.chart_options;
-        const func = new Function("Highcharts", "return " + code);
-        globalChartOptions = func(window.Highcharts);
-      } catch (e) {
-        this._queryError = "Chart options wrong";
-        globalChartOptions = {};
-      }
+    
+    _getGlobalChartOptions() {
+        if (!this._config.chart_options) return {};
+    
+        try {
+            const func = new Function("Highcharts", "return " + this._config.chart_options);
+            return func(window.Highcharts);
+        } catch (e) {
+            console.error("❌ Chart options parsing error:", e);
+            return {};
+        }
     }
-  
-    // Fusione finale di tutto
-    const finalOptions = Highcharts.merge(
-      {},
-      baseOptions,
-      typeSpecificOptions,
-      this._config.stackedOptions || {},
-      globalChartOptions || {}
-    );
-  
-    // Creiamo il grafico con le opzioni finali
-    // Non serve più stockChart, quindi usiamo sempre Highcharts.chart
-    this._chart = Highcharts.chart(container, finalOptions);
-    console.log("Finish Render");
-  }
+
+    // RENDER ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    // RENDER ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    // RENDER ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    
+    _renderChart(seriesData) {
+        console.log("⚙️ _renderChart called with data:", seriesData, "and config:", this._config);
+    
+        if (!seriesData || seriesData.length === 0) {
+            // Se non ci sono dati, inizializziamo con una serie vuota
+            seriesData = [ { name: "My Sensor", data: [] } ];
+        }
+    
+        if (!window.Highcharts) {
+            this._loadHighcharts().then(() => this._renderChart(seriesData));
+            return;
+        }
+    
+        const container = this.shadowRoot.getElementById("chartContainer");
+        if (!container) return;
+    
+        const chartType = this._getChartType();
+        const baseOptions = this._getBaseChartOptions(chartType, seriesData);
+        const typeSpecificOptions = this._getTypeSpecificOptions(chartType);
+        const globalChartOptions = this._getGlobalChartOptions();
+    
+        // Fusione finale di tutte le opzioni
+        const finalOptions = Highcharts.merge(
+            {}, baseOptions, typeSpecificOptions, this._config.stackedOptions || {}, globalChartOptions || {}
+        );
+    
+        // Creiamo il grafico con le opzioni finali
+        this._chart = Highcharts.chart(container, finalOptions);
+        console.log("✅ Finish Render");
+    }
+
 
   render() {
       console.log("Render chiamato a:", new Date().toLocaleTimeString());
@@ -390,7 +394,7 @@ class RealtimeHighHaCard extends LitElement {
             </div>
           ` : ""}
   
-          <div id="chartContainer" style="width: 100%; height: ${this._config.chart_height || "100%"};">
+          <div id="chartContainer" style="width: 100%; height: ${this._config.chart_height || "100%"}; border-radius:12px;">
           </div>
         </ha-card>
       `;
@@ -472,17 +476,33 @@ class RealtimeHighHaCardEditor extends LitElement {
   }
 
   // Aggiorna la lista di entità
-  _entityChanged(e) {
-    const index = parseInt(e.target.getAttribute("data-index"), 10);
-    const newVal = e.target.value;
-    if (!this._config.entity || index < 0) return;
+  // Gestisce i cambiamenti nei parametri per ogni entità
+  // Aggiorna la lista di entità (es. nome, colore, ecc.)
+    _entityChanged(e) {
+        if (!this._config) return;
+    
+        const target = e.target;
+        const index = parseInt(target.getAttribute("data-index"), 10);
+        const field = target.getAttribute("data-field");
+        if (isNaN(index) || !field) return;
+    
+        const newValue = target.value;
+    
+        // Creiamo una copia dell'array di entità
+        const newEntities = [...this._config.entity];
+        const updatedEntity = { ...newEntities[index] };
+    
+        // Aggiorna solo il campo modificato (es. color, name)
+        updatedEntity[field] = newValue;
+        newEntities[index] = updatedEntity;
+    
+        // Se la config è cambiata, aggiorniamo e notifichiamo Home Assistant
+        if (JSON.stringify(newEntities) !== JSON.stringify(this._config.entity)) {
+            this._config = { ...this._config, entity: newEntities };
+            this._dispatchConfig();
+        }
+    }
 
-    // Sovrascrive la singola entry
-    const newArr = [...this._config.entity];
-    newArr[index] = newVal;
-    this._config.entity = newArr;
-    this._dispatchConfig();
-  }
 
   // Aggiunge un’entità
   _addEntity() {
@@ -497,6 +517,21 @@ class RealtimeHighHaCardEditor extends LitElement {
     this._config.entity = newArr;
     this._dispatchConfig();
   }
+  
+  _toggleEntityOptionsVisibility(index) {
+      if (!this._config || !this._config.entity || !this._config.entity[index]) return;
+  
+      // Creiamo una nuova copia delle entità con lo stato aggiornato
+      const newEntities = [...this._config.entity];
+      newEntities[index] = {
+          ...newEntities[index],
+          isEntityOptionsVisible: !newEntities[index].isEntityOptionsVisible // Inverti lo stato attuale
+      };
+  
+      // Aggiorniamo la configurazione
+      this._config = { ...this._config, entity: newEntities };
+      this._dispatchConfig(); // 🔹 Corretto il nome della funzione di aggiornamento
+  } 
 
   render() {
     if (!this._config) return html``;
@@ -510,24 +545,106 @@ class RealtimeHighHaCardEditor extends LitElement {
         </div>
 
         <!-- ENTITIES TAB -->
-        <div class="section" style="display:${this.activeTab === "entities" ? "block" : "none"};">
-          <h4>Entities</h4>
-          ${this._config.entity.map((ent, i) => html`
-            <div class="entity-row">
-              <ha-textfield
-                .value=${ent}
-                data-index=${i}
-                @input=${this._entityChanged}
-              ></ha-textfield>
-              <mwc-icon-button @click=${() => this._removeEntity(i)}>
-                <ha-icon icon="hass:delete"></ha-icon>
-              </mwc-icon-button>
-            </div>
-          `)}
-          <mwc-button raised @click=${this._addEntity}>
-            <ha-icon icon="hass:plus"></ha-icon> Add Entity
-          </mwc-button>
+        <!-- Multiple entities configuration -->
+        <div class="entities section" style="display: ${this.activeTab === "entities" ? "block" : "none"};">
+            <h4>Entities</h4>
+            ${this._config.entity.map((ent, index) => html`
+                <div class="entity">
+                    
+                    <!-- Selezione dell'entità -->
+                    <ha-combo-box
+                        label="Entity"
+                        .value=${ent.entity?.startsWith("sensor.") ? ent.entity : `sensor.${ent.entity || ""}`}
+                        data-field="entity"
+                        data-index=${index}
+                        .items=${this._entities.map(entity => ({ value: entity, label: entity }))}
+                    
+                        @focusin=${() => { 
+                            if (!this._openCombos) this._openCombos = {}; 
+                            this._openCombos[index] = true; 
+                            this.requestUpdate(); 
+                        }}
+                        @focusout=${() => { 
+                            if (this._openCombos) { 
+                                delete this._openCombos[index]; 
+                            }
+                            this.requestUpdate(); 
+                        }}
+                        @value-changed=${(ev) => {
+                            this._entityChanged(ev);
+                            ev.target.blur(); // 🔹 Forza la perdita del focus
+                        }}
+                    ></ha-combo-box>
+        
+                    <!-- Nome personalizzato della serie -->
+                    <ha-textfield
+                        label="Entity Name"
+                        .value=${ent.name || ""}
+                        data-field="name"
+                        data-index=${index}
+                        @input=${(e) => this._entityChanged(e)}
+                    ></ha-textfield>
+                    
+                    <!-- Selezione colore della serie -->
+                    <ha-textfield
+                        label="Color"
+                        .value=${ent.color || ""}
+                        data-field="color"
+                        data-index=${index}
+                        @input=${(e) => this._entityChanged(e)}
+                    ></ha-textfield>
+        
+                    <!-- Switch per attivare/disattivare il div secondario -->
+                    <ha-formfield label="Show advanced options" style="margin-bottom:10px;">
+                        <ha-switch
+                            .checked=${ent.isEntityOptionsVisible || false}
+                            data-index=${index}
+                            @change=${() => this._toggleEntityOptionsVisibility(index)}
+                        ></ha-switch>
+                    </ha-formfield>
+        
+                    <div style="display:${ent.isEntityOptionsVisible ? `block` : `none`};">
+                        <!-- Opzioni avanzate Highcharts -->
+                        <label class="mdc-text-field mdc-text-field--outlined mdc-text-field--textarea">
+                            <span class="mdc-notched-outline">
+                                <span class="mdc-notched-outline__leading"></span>
+                                <span class="mdc-floating-label">Highcharts series options 
+                                    <small><a href="https://api.highcharts.com/highcharts/series" target="_blank">API here</a></small>
+                                </span>
+                                <span class="mdc-notched-outline__trailing"></span>
+                            </span>
+                            <span class="mdc-text-field__resizer">
+                                <textarea
+                                    class="mdc-text-field__input"
+                                    spellcheck="false"
+                                    rows="8"
+                                    cols="40"
+                                    style="width:100% !important;"
+                                    aria-label="Options"
+                                    data-field="options"
+                                    data-index=${index}
+                                    @input=${this._entityChanged}
+                                >${ent.options || "{}"}</textarea>
+                            </span>
+                        </label>
+                    </div>
+        
+                    <!-- Pulsante per rimuovere l'entità -->
+                    <mwc-icon-button
+                        class="delete-button"
+                        @click=${() => this._removeEntity(index)}
+                    >
+                        <ha-icon icon="hass:delete"></ha-icon>
+                    </mwc-icon-button>
+                </div>
+            `)}
+        
+            <!-- Pulsante per aggiungere una nuova entità -->
+            <mwc-button raised label="Add entity" @click=${this._addEntity}>
+                <ha-icon icon="hass:plus"></ha-icon>
+            </mwc-button>
         </div>
+
 
         <!-- CHART TAB -->
         <div class="section" style="display:${this.activeTab === "chart" ? "block" : "none"};">
@@ -551,7 +668,7 @@ class RealtimeHighHaCardEditor extends LitElement {
             <mwc-list-item value="area">Area</mwc-list-item>
             <mwc-list-item value="areaspline">Area Spline</mwc-list-item>
             <mwc-list-item value="solidgauge">Solid Gauge</mwc-list-item>
-            <mwc-list-item value="bullet">Bullet</mwc-list-item>
+            <mwc-list-item value="standardgauge">Standard Gauge</mwc-list-item>
             <mwc-list-item value="pie">Pie</mwc-list-item>
           </ha-select>
 
@@ -602,35 +719,54 @@ class RealtimeHighHaCardEditor extends LitElement {
     `;
   }
 
-  static get styles() {
-    return css`
-      .card-config {
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-      }
-      .tabs {
-        display: flex;
-        gap: 8px;
-        margin-bottom: 8px;
-      }
-      .section {
-        border: 1px solid var(--primary-color);
-        padding: 16px;
-        border-radius: 8px;
-        background: var(--card-background-color);
-      }
-      .entity-row {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        margin-bottom: 8px;
-      }
-      ha-textfield {
-        width: 70%;
-      }
-    `;
-  }
+
+
+    static get styles() {
+      return css`
+        .card-config {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+        .section {
+          border: 1px solid var(--primary-color);
+          padding: 16px;
+          border-radius: 8px;
+          background: var(--card-background-color);
+        }
+        .entities {
+          margin-top: 8px;
+        }
+        .entity {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          margin-bottom: 16px;
+          border: 1px dashed var(--secondary-text-color);
+          padding: 8px;
+          border-radius: 4px;
+        }
+        .delete-button {
+          align-self: flex-end;
+        }
+        mwc-button {
+          margin-top: 8px;
+        }
+        ha-textfield,
+        textarea {
+          display: block;
+          margin-bottom: 8px;
+        }
+        ha-formfield {
+          display: block;
+          margin-top: 8px;
+        }
+        .entity-picker {
+          min-height: 40px;
+          display: block;
+        }
+        `;  // ✅ Corretta chiusura del template literal con backtick
+    }
 }
 
 customElements.define("realtime-highha-card-editor", RealtimeHighHaCardEditor);
