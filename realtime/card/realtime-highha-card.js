@@ -1,4 +1,4 @@
-const version = "0.1.4"; //Config start
+const version = "0.1.6"; //Setting up... series sensors colors
 
 /********************************************************
  * Import LitElement libraries (version 2.4.0)
@@ -35,23 +35,34 @@ class RealtimeHighHaCard extends LitElement {
   }
 
   static getConfigElement() {
-    console.log("Create Element");
-    return document.createElement("realtime-highha-card-editor");
+      console.log("Create Element");
+      const editor = document.createElement("realtime-highha-card-editor");
+      editor.comboBoxEntities = this.comboBoxEntities || []; // Passiamo la lista di sensori all'editor
+      this._editor = editor; // Salviamo un riferimento per aggiornamenti futuri
+      return editor;
   }
 
   static getStubConfig() {
     console.log("getStubConfig");
     return {
       title: "Realtime Chart",
-      entity: ["sensor.pzem_power"],
+      entity: [
+        {
+          entity: "sensor.pzem_power",
+          name: "POWER",
+          color: "red",
+          options: "{}"
+        }
+      ],
       chart: {
         type: "line",
-        data_kept: 120,
+        data_kept: 12,
         update_interval: 5
       },
-      config: {}  // Opzioni extra Highcharts
+      config: {}
     };
   }
+
 
 
   setConfig(config) {
@@ -77,18 +88,11 @@ class RealtimeHighHaCard extends LitElement {
       // Controlliamo se ci sono entità definite
       const entitiesDefined = Array.isArray(config.entity) && config.entity.length > 0;
   
-      if (!entitiesDefined) {
+      if (!entitiesDefined){ 
           throw new Error("You must define at least one entity in the configuration.");
       }
   
-      // Se Home Assistant è disponibile, recupera tutte le entità sensore
-      if (this.hass) {
-          this._entities = Object.keys(this.hass.states).filter((e) => e.startsWith("sensor."));
-      } else {
-          this._entities = []; // Inizializza la lista vuota
-      }
-  
-      console.log("Card: Configurazione aggiornata:", this._config);
+
   }
 
   disconnectedCallback() {
@@ -102,48 +106,48 @@ class RealtimeHighHaCard extends LitElement {
   }  
 
   set hass(newHass) {
-    if (!newHass) return;
 
-    // Se non hai ancora una config o entità definita
-    if (!this._config || !this._config.entity?.length) {
-      return;
-    }
-
-    // Se non c'era un hass precedente, assegna e stop
-    if (!this._hass) {
-      this._hass = newHass;
-      // Potresti fare un primo update del grafico
-      this._updateData("HASS");
-      return;
-    }
-
-    // Controlla se l'entità (o le entità) configurata è effettivamente cambiata.
-    const relevantEntities = this._config.entity;
-    let changed = false;
-
-    for (const ent of relevantEntities) {
-      const oldState = this._hass.states[ent];
-      const newState = newHass.states[ent];
-      if (!oldState || !newState) continue;
-
-      // Se stato o attributi differiscono, segna un cambio
-      if (
-        oldState.state !== newState.state ||
-        JSON.stringify(oldState.attributes) !== JSON.stringify(newState.attributes)
-      ) {
-        changed = true;
-        break;
+      if (!newHass) return;
+      
+      // Se la lista comboBoxEntities è vuota, popolala con i sensori disponibili in hass.states
+      if (!this.comboBoxEntities || this.comboBoxEntities.length === 0) {
+          if (newHass.states) {
+              this.comboBoxEntities = Object.keys(newHass.states).filter(e => e.startsWith("sensor."));
+              this.requestUpdate(); 
+              console.log("Popolata comboBoxEntities con sensori:", this.comboBoxEntities);
+          }
       }
-    }
-
-    if (!changed) {
-      // Se non è cambiato nulla di rilevante, niente aggiornamento
-      return;
-    }
-
-    // Altrimenti aggiorna e richiama la sola funzione che aggiorna il grafico
-    this._hass = newHass;
-    //this._updateData();  // Aggiorni i valori sul grafico
+  
+      if (!this._config || !this._config.entity?.length) {
+        console.log("NO CONFIG HASS");
+        return;
+      }
+  
+      if (!this._hass) {
+        this._hass = newHass;
+        this._updateData("HASS");
+        console.log("UPDATE DATA HASS");
+        return;
+      }
+  
+      const relevantEntities = this._config.entity;
+      let changed = false;
+  
+      for (const ent of relevantEntities) {
+        //console.log("RELEVANT ENTITY HASS", ent);
+        const oldState = this._hass.states[ent];
+        const newState = newHass.states[ent];
+        if (!oldState || !newState) continue;
+  
+      }
+  
+      this._hass = newHass;
+      
+      // Passiamo la lista all'editor se è attivo
+      if (this._editor) {
+          this._editor.comboBoxEntities = this.comboBoxEntities;
+          this._editor.requestUpdate();
+      }
   }
 
   async _loadHighcharts() {
@@ -233,34 +237,45 @@ class RealtimeHighHaCard extends LitElement {
       }, interval * 1000);
   }
 
-    _updateData(source = "unknown") {  
-        if (!this._hass || !this._chart || !this._config.entity) return;
-    
-        const now = new Date();
-        const localTime = now.getTime() - now.getTimezoneOffset() * 60000;
-        const keep = this._config.chart?.data_kept || 120;
-    
-        this._config.entity.forEach((entityId, index) => {
-            const stateObj = this._hass.states[entityId];
-            if (!stateObj) return;
-    
-            const val = parseFloat(stateObj.state);
-            if (isNaN(val)) return;
-    
-            console.log(`📊 Nuovo dato per ${entityId}: ${val} (Origine: ${source})`);
-    
-            // Verifica che la serie esista prima di aggiornarla
-            if (this._chart.series[index]) {
-                this._chart.series[index].addPoint(
-                    [localTime, val], 
-                    true, 
-                    this._chart.series[index].data.length >= keep
-                );
-            } else {
-                console.warn(`❌ La serie per ${entityId} non esiste ancora!`);
-            }
-        });
-    }
+  _updateData(source = "unknown") {  
+      console.log(`🔄 _updateData chiamato da ${source}`);
+      if (!this._hass || !this._chart || !this._config.entity) return;
+  
+      const now = new Date();
+      const localTime = now.getTime() - now.getTimezoneOffset() * 60000;
+      const keep = this._config.chart?.data_kept || 120;
+  
+      this._config.entity.forEach((ent, index) => {
+          const entityId = ent.entity;
+          if (!entityId || !this._hass.states[entityId]) return;
+  
+          const stateObj = this._hass.states[entityId];
+          const val = parseFloat(stateObj.state);
+          if (isNaN(val)) return;
+  
+          console.log(`📊 Nuovo dato per ${entityId}: ${val} (Origine: ${source})`);
+  
+          // Verifica se la serie esiste, altrimenti la crea
+          if (!this._chart.series[index]) {
+              console.warn(`❌ La serie per ${entityId} non esiste ancora! Creazione della serie...`);
+              this._chart.addSeries({
+                  name: ent.name || entityId,
+                  color: ent.color || undefined,
+                  data: [],
+                  ...JSON.parse(ent.options || "{}")
+              });
+          }
+  
+          // Aggiunge il punto alla serie esistente
+          this._chart.series[index].addPoint(
+              [localTime, val], 
+              true, 
+              this._chart.series[index].data.length >= keep
+          );
+      });
+  }
+
+
     
     _getBaseChartOptions(chartType, seriesData) {
         return {
@@ -350,36 +365,40 @@ class RealtimeHighHaCard extends LitElement {
     // RENDER ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     // RENDER ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     
-    _renderChart(seriesData) {
-        console.log("⚙️ _renderChart called with data:", seriesData, "and config:", this._config);
-    
-        if (!seriesData || seriesData.length === 0) {
-            // Se non ci sono dati, inizializziamo con una serie vuota
-            seriesData = [ { name: "My Sensor", data: [] } ];
-        }
+    _renderChart() {
+        console.log("⚙️ _renderChart called with config:", this._config);
     
         if (!window.Highcharts) {
-            this._loadHighcharts().then(() => this._renderChart(seriesData));
+            this._loadHighcharts().then(() => this._renderChart());
             return;
         }
     
         const container = this.shadowRoot.getElementById("chartContainer");
         if (!container) return;
     
+        // Costruiamo le serie basandoci sulla configurazione
+        const seriesData = this._config.entity.map(ent => ({
+            name: ent.name || ent.entity,  // Nome della serie
+            color: ent.color || undefined, // Colore della serie
+            data: [],  // Inizialmente vuota, verrà aggiornata nel polling
+            ...JSON.parse(ent.options || "{}") // Opzioni personalizzate
+        }));
+    
         const chartType = this._getChartType();
         const baseOptions = this._getBaseChartOptions(chartType, seriesData);
         const typeSpecificOptions = this._getTypeSpecificOptions(chartType);
         const globalChartOptions = this._getGlobalChartOptions();
     
-        // Fusione finale di tutte le opzioni
-        const finalOptions = Highcharts.merge(
-            {}, baseOptions, typeSpecificOptions, this._config.stackedOptions || {}, globalChartOptions || {}
-        );
+        // Fusione delle opzioni per il grafico
+        const finalOptions = Highcharts.merge({}, baseOptions, typeSpecificOptions, this._config.stackedOptions || {}, globalChartOptions || {});
+    
+        console.log("🎨 Opzioni finali del grafico:", JSON.stringify(finalOptions, null, 2));
     
         // Creiamo il grafico con le opzioni finali
         this._chart = Highcharts.chart(container, finalOptions);
         console.log("✅ Finish Render");
     }
+
 
 
   render() {
@@ -425,18 +444,19 @@ class RealtimeHighHaCardEditor extends LitElement {
     this._config = {};
   }
 
-    setConfig(config) {
-      
-      this._config = { ...config, entities: config.entities || [] };
-
-      // 🔹 Se la configurazione non ha entità definite, usiamo quelle già trovate
-      if (!this._entities || this._entities.length === 0) {
-        this._entities = Object.keys(this.hass?.states || {}).filter(
-          (e) => e.startsWith("sensor.")
-        );
-
+  setConfig(config) {
+      console.log("Editor: setConfig chiamato con:", config);
+      const normalizedEntities = Array.isArray(config.entity) ? config.entity : [config.entity];
+  
+      this._config = { ...config, entity: normalizedEntities };
+  
+      // Usa la lista di entità passata dalla card principale
+      if (!this.comboBoxEntities || this.comboBoxEntities.length === 0) {
+          this.comboBoxEntities = this.hass ? Object.keys(this.hass.states).filter((e) => e.startsWith("sensor.")) : [];
       }
-    }
+  
+      this.requestUpdate();
+  }
 
   get config() {
     return this._config;
@@ -479,34 +499,47 @@ class RealtimeHighHaCardEditor extends LitElement {
   // Gestisce i cambiamenti nei parametri per ogni entità
   // Aggiorna la lista di entità (es. nome, colore, ecc.)
     _entityChanged(e) {
-        if (!this._config) return;
-    
-        const target = e.target;
-        const index = parseInt(target.getAttribute("data-index"), 10);
-        const field = target.getAttribute("data-field");
-        if (isNaN(index) || !field) return;
-    
-        const newValue = target.value;
-    
-        // Creiamo una copia dell'array di entità
-        const newEntities = [...this._config.entity];
-        const updatedEntity = { ...newEntities[index] };
-    
-        // Aggiorna solo il campo modificato (es. color, name)
-        updatedEntity[field] = newValue;
-        newEntities[index] = updatedEntity;
-    
-        // Se la config è cambiata, aggiorniamo e notifichiamo Home Assistant
-        if (JSON.stringify(newEntities) !== JSON.stringify(this._config.entity)) {
-            this._config = { ...this._config, entity: newEntities };
-            this._dispatchConfig();
-        }
+      if (!this._config) return;
+  
+      const target = e.target;
+      const index = parseInt(target.getAttribute("data-index"), 10);
+      const field = target.getAttribute("data-field");
+      if (isNaN(index) || !field) return;
+  
+      // ha-combo-box di solito invia il nuovo valore in e.detail.value
+      // facciamo un fallback su target.value se necessario
+      const newValue = e.detail?.value ?? target.value;
+  
+      // Creiamo una copia dell'array di entità
+      const newEntities = [...this._config.entity];
+      const updatedEntity = { ...newEntities[index] };
+  
+      // Aggiorna solo il campo modificato
+      updatedEntity[field] = newValue;
+      newEntities[index] = updatedEntity;
+  
+      // Se la config è cambiata, aggiorniamo e notifichiamo
+      if (JSON.stringify(newEntities) !== JSON.stringify(this._config.entity)) {
+        this._config = { ...this._config, entity: newEntities };
+        this._dispatchConfig();
+      }
     }
+
 
 
   // Aggiunge un’entità
   _addEntity() {
-    this._config.entity = [...this._config.entity, "sensor.new_sensor"];
+    // Invece di aggiungere una semplice stringa,
+    // aggiungiamo un oggetto con la proprietà "entity"
+    this._config.entity = [
+      ...this._config.entity,
+      {
+        entity: "sensor.new_sensor",
+        name: "",
+        color: "",
+        options: "{}"
+      }
+    ];
     this._dispatchConfig();
   }
 
@@ -532,9 +565,36 @@ class RealtimeHighHaCardEditor extends LitElement {
       this._config = { ...this._config, entity: newEntities };
       this._dispatchConfig(); // 🔹 Corretto il nome della funzione di aggiornamento
   } 
+  
+  shouldUpdate(changedProps) {
+   
+        if (this._forceRender) {
+
+          this._forceRender = false; // Resettiamo il flag dopo il rendering
+          this.requestUpdate();
+          return true;
+        }
+    
+        // 🔹 Se `_openCombos` è undefined, non bloccare il rendering
+        if (!this._openCombos || Object.keys(this._openCombos).length === 0) {
+            return true;
+        }
+    
+        // 🔹 Se almeno un combobox è aperto, blocca il rendering
+        if (Object.values(this._openCombos).some(isOpen => isOpen)) {
+            return false;
+        }
+    
+
+        return true;
+    }  
 
   render() {
     if (!this._config) return html``;
+
+    // Assicuriamoci di avere un array, così evitiamo errori di "undefined.map()"
+  const availableEntities = this.comboBoxEntities || [];
+  console.log("Available entities in editor:", availableEntities);
 
     return html`
       <div class="card-config">
@@ -545,20 +605,17 @@ class RealtimeHighHaCardEditor extends LitElement {
         </div>
 
         <!-- ENTITIES TAB -->
-        <!-- Multiple entities configuration -->
         <div class="entities section" style="display: ${this.activeTab === "entities" ? "block" : "none"};">
             <h4>Entities</h4>
             ${this._config.entity.map((ent, index) => html`
                 <div class="entity">
                     
-                    <!-- Selezione dell'entità -->
                     <ha-combo-box
                         label="Entity"
                         .value=${ent.entity?.startsWith("sensor.") ? ent.entity : `sensor.${ent.entity || ""}`}
                         data-field="entity"
                         data-index=${index}
-                        .items=${this._entities.map(entity => ({ value: entity, label: entity }))}
-                    
+                        .items=${availableEntities.map(entity => ({ value: entity, label: entity }))}
                         @focusin=${() => { 
                             if (!this._openCombos) this._openCombos = {}; 
                             this._openCombos[index] = true; 
@@ -572,11 +629,10 @@ class RealtimeHighHaCardEditor extends LitElement {
                         }}
                         @value-changed=${(ev) => {
                             this._entityChanged(ev);
-                            ev.target.blur(); // 🔹 Forza la perdita del focus
+                            ev.target.blur(); // Forza la perdita del focus
                         }}
                     ></ha-combo-box>
-        
-                    <!-- Nome personalizzato della serie -->
+
                     <ha-textfield
                         label="Entity Name"
                         .value=${ent.name || ""}
@@ -585,7 +641,6 @@ class RealtimeHighHaCardEditor extends LitElement {
                         @input=${(e) => this._entityChanged(e)}
                     ></ha-textfield>
                     
-                    <!-- Selezione colore della serie -->
                     <ha-textfield
                         label="Color"
                         .value=${ent.color || ""}
@@ -593,8 +648,7 @@ class RealtimeHighHaCardEditor extends LitElement {
                         data-index=${index}
                         @input=${(e) => this._entityChanged(e)}
                     ></ha-textfield>
-        
-                    <!-- Switch per attivare/disattivare il div secondario -->
+
                     <ha-formfield label="Show advanced options" style="margin-bottom:10px;">
                         <ha-switch
                             .checked=${ent.isEntityOptionsVisible || false}
@@ -602,9 +656,8 @@ class RealtimeHighHaCardEditor extends LitElement {
                             @change=${() => this._toggleEntityOptionsVisibility(index)}
                         ></ha-switch>
                     </ha-formfield>
-        
+
                     <div style="display:${ent.isEntityOptionsVisible ? `block` : `none`};">
-                        <!-- Opzioni avanzate Highcharts -->
                         <label class="mdc-text-field mdc-text-field--outlined mdc-text-field--textarea">
                             <span class="mdc-notched-outline">
                                 <span class="mdc-notched-outline__leading"></span>
@@ -628,23 +681,17 @@ class RealtimeHighHaCardEditor extends LitElement {
                             </span>
                         </label>
                     </div>
-        
-                    <!-- Pulsante per rimuovere l'entità -->
-                    <mwc-icon-button
-                        class="delete-button"
-                        @click=${() => this._removeEntity(index)}
-                    >
+
+                    <mwc-icon-button class="delete-button" @click=${() => this._removeEntity(index)}>
                         <ha-icon icon="hass:delete"></ha-icon>
                     </mwc-icon-button>
                 </div>
             `)}
-        
-            <!-- Pulsante per aggiungere una nuova entità -->
+
             <mwc-button raised label="Add entity" @click=${this._addEntity}>
                 <ha-icon icon="hass:plus"></ha-icon>
             </mwc-button>
         </div>
-
 
         <!-- CHART TAB -->
         <div class="section" style="display:${this.activeTab === "chart" ? "block" : "none"};">
@@ -708,7 +755,7 @@ class RealtimeHighHaCardEditor extends LitElement {
                     this._config.config = JSON.parse(e.target.value);
                     this._dispatchConfig();
                   } catch {
-                    // Se l'utente non inserisce un JSON valido, ignoriamo
+                    // se non è JSON valido, ignoriamo
                   }
                 }}
               ></textarea>
@@ -718,6 +765,7 @@ class RealtimeHighHaCardEditor extends LitElement {
       </div>
     `;
   }
+
 
 
 
