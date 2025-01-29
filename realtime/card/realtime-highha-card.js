@@ -1,4 +1,4 @@
-const version = "0.1.6"; //Setting up... series sensors colors
+const version = "0.1.7"; //Setting up... series sensors colors
 
 /********************************************************
  * Import LitElement libraries (version 2.4.0)
@@ -26,7 +26,7 @@ window.customCards.push({
 class RealtimeHighHaCard extends LitElement {
 
   static get properties() {
-    console.log("getProprieties");
+    //console.log("getProprieties");
     return {
       _config: { type: Object },
       _chart: { type: Object },
@@ -35,7 +35,7 @@ class RealtimeHighHaCard extends LitElement {
   }
 
   static getConfigElement() {
-      console.log("Create Element");
+      //console.log("Create Element");
       const editor = document.createElement("realtime-highha-card-editor");
       editor.comboBoxEntities = this.comboBoxEntities || []; // Passiamo la lista di sensori all'editor
       this._editor = editor; // Salviamo un riferimento per aggiornamenti futuri
@@ -63,10 +63,8 @@ class RealtimeHighHaCard extends LitElement {
     };
   }
 
-
-
   setConfig(config) {
-      console.log("Card: setConfig chiamato con:", config);
+      //console.log("Card: setConfig chiamato con:", config);
       
       // Ferma il polling attuale se esiste
       if (this._pollingTimer) {
@@ -97,7 +95,7 @@ class RealtimeHighHaCard extends LitElement {
 
   disconnectedCallback() {
       super.disconnectedCallback();
-      console.log("❌ Card rimossa: sto fermando il polling!");
+      //console.log("❌ Card rimossa: sto fermando il polling!");
       
       if (this._pollingTimer) {
           clearInterval(this._pollingTimer);
@@ -114,19 +112,19 @@ class RealtimeHighHaCard extends LitElement {
           if (newHass.states) {
               this.comboBoxEntities = Object.keys(newHass.states).filter(e => e.startsWith("sensor."));
               this.requestUpdate(); 
-              console.log("Popolata comboBoxEntities con sensori:", this.comboBoxEntities);
+              // console.log("Popolata comboBoxEntities con sensori:", this.comboBoxEntities);
           }
       }
   
       if (!this._config || !this._config.entity?.length) {
-        console.log("NO CONFIG HASS");
+        //console.log("NO CONFIG HASS");
         return;
       }
   
       if (!this._hass) {
         this._hass = newHass;
         this._updateData("HASS");
-        console.log("UPDATE DATA HASS");
+        //console.log("UPDATE DATA HASS");
         return;
       }
   
@@ -152,56 +150,87 @@ class RealtimeHighHaCard extends LitElement {
 
   async _loadHighcharts() {
       return new Promise(async (resolve, reject) => {
-          // Se Highcharts è già caricato, risolvi subito
+          // Se Highcharts è già caricato, assicuriamoci che i moduli aggiuntivi siano presenti
           if (window.Highcharts) {
+              //console.log("🔄 Highcharts già caricato, verifico i moduli...");
+  
+              // Controllo se mancano i moduli aggiuntivi
+              const missingModules = [];
+              if (!window.Highcharts.seriesTypes.solidgauge) {
+                  missingModules.push("https://code.highcharts.com/modules/solid-gauge.js");
+              }
+              if (!window.Highcharts.seriesTypes.pie) {
+                  missingModules.push("https://code.highcharts.com/highcharts-more.js");
+              }
+  
+              // Carica solo i moduli mancanti
+              if (missingModules.length > 0) {
+                  //console.log("📥 Caricamento moduli mancanti:", missingModules);
+                  for (const src of missingModules) {
+                      await this._loadScript(src);
+                  }
+              } else {
+                  console.log("✅ Tutti i moduli necessari sono già presenti.");
+              }
+  
               resolve();
               return;
           }
   
-          // Se un altro script è in fase di caricamento, aspettiamo che finisca
+          // Se un altro script è già in fase di caricamento, aspettiamo
           if (window._highchartsLoading) {
+              //console.log("⏳ Attesa caricamento Highcharts già in corso...");
               window._highchartsLoading.then(resolve).catch(reject);
               return;
           }
   
-          // Lista di script da caricare in ordine
-          const scripts = [
-              "https://code.highcharts.com/highcharts.js",
-              "https://code.highcharts.com/highcharts-more.js",
-              "https://code.highcharts.com/modules/solid-gauge.js",
-          ];
+          // Impostiamo un flag per evitare caricamenti multipli simultanei
+          window._highchartsLoading = new Promise(async (loadResolve, loadReject) => {
+              const scripts = [
+                  "https://code.highcharts.com/highcharts.js",
+                  "https://code.highcharts.com/highcharts-more.js",
+                  "https://code.highcharts.com/modules/solid-gauge.js"
+              ];
   
-          console.log("📥 Inizio caricamento Highcharts in sequenza...");
+              console.log("📥 Inizio caricamento Highcharts e moduli...");
   
-          // Funzione per caricare un singolo script e aspettare che termini
-          const loadScript = (src) => {
-              return new Promise((scriptResolve, scriptReject) => {
-                  const script = document.createElement("script");
-                  script.src = src;
-                  script.async = true;
-                  script.onload = () => {
-                      console.log(`✅ Caricato: ${src}`);
-                      scriptResolve();
-                  };
-                  script.onerror = () => {
-                      console.error(`❌ Errore nel caricamento di: ${src}`);
-                      scriptReject();
-                  };
-                  document.head.appendChild(script);
-              });
-          };
-  
-          // Carica gli script uno alla volta
-          try {
-              for (const src of scripts) {
-                  await loadScript(src);
+              try {
+                  for (const src of scripts) {
+                      await this._loadScript(src);
+                  }
+                  //console.log("🎯 Tutti gli script di Highcharts caricati con successo!");
+                  loadResolve();
+              } catch (error) {
+                  //console.error("❌ Errore nel caricamento degli script Highcharts:", error);
+                  loadReject(error);
               }
-              console.log("🎯 Tutti gli script di Highcharts caricati con successo!");
+          });
+  
+          // Aspettiamo il caricamento prima di risolvere la funzione principale
+          window._highchartsLoading.then(resolve).catch(reject);
+      });
+  }
+  
+  _loadScript(src) {
+      return new Promise((resolve, reject) => {
+          if (document.querySelector(`script[src="${src}"]`)) {
+              //console.log(`🔄 Il modulo ${src} è già stato caricato.`);
               resolve();
-          } catch (error) {
-              console.error("❌ Errore nel caricamento degli script Highcharts:", error);
-              reject(error);
+              return;
           }
+  
+          const script = document.createElement("script");
+          script.src = src;
+          script.async = true;
+          script.onload = () => {
+              console.log(`✅ Caricato: ${src}`);
+              resolve();
+          };
+          script.onerror = () => {
+              //console.error(`❌ Errore nel caricamento di: ${src}`);
+              reject();
+          };
+          document.head.appendChild(script);
       });
   }
 
@@ -211,25 +240,27 @@ class RealtimeHighHaCard extends LitElement {
   }
 
   async _initChart() {
+    console.log("INIT CHARTS");
     await this._loadHighcharts();
+    console.log("INIT CHARTS CAN RENDER");
     // Costruiamo il grafico la prima volta con una serie vuota
-    console.log(window.Highcharts)
+    //console.log(window.Highcharts)
     this._renderChart([]);
     this._startPolling();
 
   }
 
   _startPolling() {
-      console.log("Start Polling");
+      //console.log("Start Polling");
       const interval = this._config.chart?.update_interval || 1;
   
       if (this._pollingTimer) {
-          console.log("⏸️ Polling già attivo, non avvio un nuovo timer.");
+          //console.log("⏸️ Polling già attivo, non avvio un nuovo timer.");
           return; // Evita di creare un nuovo polling
       }
   
       console.log(`Polling avviato con intervallo di ${interval} secondi`);
-      this._updateData();
+      this._updateData("FIRST");
       
       this._pollingTimer = setInterval(() => {
           //console.log("Polling: aggiornamento dati...");
@@ -237,13 +268,12 @@ class RealtimeHighHaCard extends LitElement {
       }, interval * 1000);
   }
 
-  _updateData(source = "unknown") {  
-      console.log(`🔄 _updateData chiamato da ${source}`);
+  _updateData(source = "unknown") {
+      //console.log(`🔄 _updateData chiamato da ${source}`);
       if (!this._hass || !this._chart || !this._config.entity) return;
   
-      const now = new Date();
-      const localTime = now.getTime() - now.getTimezoneOffset() * 60000;
-      const keep = this._config.chart?.data_kept || 120;
+      const chartType = this._getChartType();
+      //console.log(`📢 Chart Type rilevato: ${chartType}`);
   
       this._config.entity.forEach((ent, index) => {
           const entityId = ent.entity;
@@ -253,152 +283,260 @@ class RealtimeHighHaCard extends LitElement {
           const val = parseFloat(stateObj.state);
           if (isNaN(val)) return;
   
-          console.log(`📊 Nuovo dato per ${entityId}: ${val} (Origine: ${source})`);
+          //console.log(`📊 Nuovo dato per ${entityId}: ${val} (Origine: ${source})`);
   
-          // Verifica se la serie esiste, altrimenti la crea
-          if (!this._chart.series[index]) {
-              console.warn(`❌ La serie per ${entityId} non esiste ancora! Creazione della serie...`);
-              this._chart.addSeries({
-                  name: ent.name || entityId,
-                  color: ent.color || undefined,
-                  data: [],
-                  ...JSON.parse(ent.options || "{}")
-              });
+          if (chartType === "solidgauge") {
+            //console.log(`⚡ [SOLIDGAUGE] Tentativo di aggiornare il valore per ${entityId}: ${val}`);
+        
+            if (this._chart.series[index]) {
+                //console.log(`✅ Serie trovata per ${entityId}:`, this._chart.series[index]);
+        
+                if (this._chart.series[index].points[0]) {
+                    //console.log(`⏫ Aggiornamento valore Solid Gauge per ${entityId}: ${val}`);
+                    this._chart.series[index].points[0].update(val, true, false);
+                } else {
+                    this._chart.series[index].setData([val], true);
+                }
+            } else {
+                console.warn(`❌ La serie per ${entityId} non esiste ancora! Creazione della serie...`);
+
+                const newSeries = {
+                    name: ent.name || entityId,
+                    type: "solidgauge",
+                    data: [val],
+                    yAxis: {
+                        min: 0,
+                        max: this._config.chart?.max_value || 100
+                    }
+                };
+        
+                this._chart.addSeries(newSeries, true);
+            }
+          } else {
+              const now = new Date();
+              const localTime = now.getTime() - now.getTimezoneOffset() * 60000;
+              const keep = this._config.chart?.data_kept || 120;
+  
+              if (!this._chart.series[index]) {
+                  console.warn(`❌ La serie per ${entityId} non esiste ancora! Creazione della serie...`);
+                  this._chart.addSeries({ name: ent.name || entityId, data: [] }, true);
+              }
+              this._chart.series[index].addPoint(
+                  [localTime, val],
+                  true,
+                  this._chart.series[index].data.length >= keep
+              );
           }
-  
-          // Aggiunge il punto alla serie esistente
-          this._chart.series[index].addPoint(
-              [localTime, val], 
-              true, 
-              this._chart.series[index].data.length >= keep
-          );
       });
   }
 
+  _getBaseChartOptions(chartType, seriesData) {
+      return {
+          chart: {
+              type: chartType,
+              zooming: { type: "xy" }
+          },
+          tooltip: {
+              valueDecimals: 1
+          },
+          legend: {
+              enabled: this._config.legend === true
+          },
+          credits: {
+              enabled: false
+          },
+          title: {
+              text: null
+          },
+          xAxis: chartType === "solidgauge" ? undefined : { type: "datetime" },
+          yAxis: {
+              title: { text: null },
+              max: this._config.chart?.max_value ?? null // 🔥 Usa il max_value configurato
+          },
+          series: seriesData
+      };
+  }
 
-    
-    _getBaseChartOptions(chartType, seriesData) {
-        return {
-            chart: {
-                type: chartType,
-                zooming: { type: "xy" }
-            },
-            tooltip: {
-                valueDecimals: 1
-            },
-            legend: {
-                enabled: this._config.legend === true
-            },
-            credits: {
-                enabled: false
-            },
-            title: {
-                text: null
-            },
-            xAxis: {
-                type: "datetime"
-            },
-            yAxis: {
-                title: { text: null },
-                max: this._config.max_y !== undefined ? this._config.max_y : null
-            },
-            series: seriesData
-        };
-    }
+  _getTypeSpecificOptions(chartType) {
+      const options = {};
+  
+      switch (chartType) {
+          case "solidgauge":
+              options.chart = { type: "solidgauge", margin: [10, 0, 5, 0], spacing: [0, 0, 0, 0] };
+              options.pane ={
+                              center: ['50%', '50%'],
+                              size: '100%',
+                              startAngle: -90,
+                              endAngle: 90,
+                              background: {
+                                  backgroundColor: {
+                                      linearGradient: {
+                                          x1: 1,
+                                          x2: 0,
+                                          y1: 1,
+                                          y2: 0
+                                      },
+                                      stops: [
+                                          [0, '#DFDFDF'],
+                                          [1, '#FDFDFD']
+                                      ]
+                                  },
+                                  borderRadius: 5,
+                                  innerRadius: '60%',
+                                  outerRadius: '100%',
+                                  shape: 'arc'
+                              }
+                          };
+                          
+              options.yAxis ={
+                              min: 0, 
+                              max: this._config.chart?.max_value !== undefined ? this._config.chart.max_value : null,
+                              stops: [
+                                  [0.1, '#55BF3B'], // green
+                                  [0.5, '#DDDF0D'], // yellow
+                                  [0.9, '#DF5353'] // red
+                              ],
+                              lineWidth: 0,
+                              tickWidth: 0,
+                              minorTickInterval: null,
+                              tickAmount: 2,
+                              title: {
+                                  y: 0
+                              },
+                              labels: {
+                                  y: 16
+                              }
+                          };
+              options.legend = { enabled: false };
+              options.plotOptions = {
+                                    solidgauge: {
+                                        borderRadius: 3,
+                                        dataLabels: {
+                                            y: 0,
+                                            borderWidth: 0,
+                                            useHTML: true
+                                            }
+                                        }
+                                    };
+              break;
+  
+          case "bullet":
+              options.chart = { type: "bullet" };
+              options.plotOptions = { series: { pointPadding: 0.25, groupPadding: 0 } };
+              break;
+  
+          case "pie":
+              options.chart = { type: "pie" };
+              delete options.xAxis;
+              delete options.yAxis;
+              break;
+  
+          default:
+              break;
+      }
+  
+      return options;
+  }
 
-    _getTypeSpecificOptions(chartType) {
-        const options = {};
+  _getChartType() {
+      if (!this._config || !this._config.chart) {
+          return "line"; // Tipo di default se la configurazione è assente
+      }
+  
+      const chartType = this._config.chart.type || "line";
+  
+      const chartTypeMap = {
+          "areastacked": "area",
+          "areastackedpercent": "area",
+          "barstacked": "bar",
+          "columnstacked": "column",
+          "pie": "pie", // Assicuriamoci che il tipo "pie" sia incluso
+          "solidgauge": "solidgauge"  // 🔥 Deve essere esplicitamente incluso!
+      };
+  
+      return chartTypeMap[chartType] || chartType;
+  }
     
-        switch (chartType) {
-            case "solidgauge":
-                options.chart = { type: "solidgauge" };
-                options.pane = { startAngle: -140, endAngle: 140 };
-                options.yAxis = { min: 0, max: 100, title: { text: null } };
-                options.legend = { enabled: false };
-                break;
-    
-            case "bullet":
-                options.chart = { type: "bullet" };
-                options.plotOptions = { series: { pointPadding: 0.25, groupPadding: 0 } };
-                break;
-    
-            case "pie":
-                options.chart = { type: "pie" };
-                delete options.xAxis;
-                delete options.yAxis;
-                break;
-    
-            default:
-                break;
-        }
-    
-        return options;
-    }
-
-
-    _getChartType() {
-        let chartType = (this._config.chart && this._config.chart.type) || "line";
-    
-        const chartTypeMap = {
-            "areastacked": "area",
-            "areastackedpercent": "area",
-            "barstacked": "bar",
-            "columnstacked": "column"
-        };
-    
-        return chartTypeMap[chartType] || chartType;
-    }
-    
-    _getGlobalChartOptions() {
-        if (!this._config.chart_options) return {};
-    
-        try {
-            const func = new Function("Highcharts", "return " + this._config.chart_options);
-            return func(window.Highcharts);
-        } catch (e) {
-            console.error("❌ Chart options parsing error:", e);
-            return {};
-        }
-    }
+  _getGlobalChartOptions() {
+      if (!this._config.chart_options) return {};
+  
+      try {
+          const func = new Function("Highcharts", "return " + this._config.chart_options);
+          return func(window.Highcharts);
+      } catch (e) {
+          console.error("❌ Chart options parsing error:", e);
+          return {};
+      }
+  }
 
     // RENDER ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     // RENDER ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     // RENDER ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     
-    _renderChart() {
-        console.log("⚙️ _renderChart called with config:", this._config);
-    
-        if (!window.Highcharts) {
-            this._loadHighcharts().then(() => this._renderChart());
-            return;
-        }
-    
-        const container = this.shadowRoot.getElementById("chartContainer");
-        if (!container) return;
-    
-        // Costruiamo le serie basandoci sulla configurazione
-        const seriesData = this._config.entity.map(ent => ({
-            name: ent.name || ent.entity,  // Nome della serie
-            color: ent.color || undefined, // Colore della serie
-            data: [],  // Inizialmente vuota, verrà aggiornata nel polling
-            ...JSON.parse(ent.options || "{}") // Opzioni personalizzate
-        }));
-    
-        const chartType = this._getChartType();
-        const baseOptions = this._getBaseChartOptions(chartType, seriesData);
-        const typeSpecificOptions = this._getTypeSpecificOptions(chartType);
-        const globalChartOptions = this._getGlobalChartOptions();
-    
-        // Fusione delle opzioni per il grafico
-        const finalOptions = Highcharts.merge({}, baseOptions, typeSpecificOptions, this._config.stackedOptions || {}, globalChartOptions || {});
-    
-        console.log("🎨 Opzioni finali del grafico:", JSON.stringify(finalOptions, null, 2));
-    
-        // Creiamo il grafico con le opzioni finali
-        this._chart = Highcharts.chart(container, finalOptions);
-        console.log("✅ Finish Render");
-    }
-
+  _renderChart() {
+      console.log("⚙️ _renderChart called with config:", this._config);
+  
+      if (!window.Highcharts) {
+          this._loadHighcharts().then(() => this._renderChart());
+          return;
+      }
+  
+      const container = this.shadowRoot.getElementById("chartContainer");
+      if (!container) return;
+  
+      // Creazione delle serie dati
+      const seriesData = this._config.entity.map(ent => {
+          let extraOptions = {};
+          if (ent.options && typeof ent.options === "string") {
+              try {
+                  const func = new Function("Highcharts", "return " + ent.options);
+                  extraOptions = func(window.Highcharts);
+              } catch (e) {
+                  console.error(`❌ Errore nelle opzioni della serie ${ent.entity}:`, e);
+                  extraOptions = {};
+              }
+          }
+      
+          // 🔥 Se il grafico è solidgauge, impostiamo una serie specifica
+          if (this._config.chart?.type === "solidgauge") {
+              return Highcharts.merge({
+                  name: ent.name || ent.entity,
+                  color: ent.color || undefined,
+                  data: [0],  // Inizializza con un valore di default
+                  dataLabels: {
+                      y: -70,
+                      format: `
+                          <div style="text-align:center">
+                              <span class="adattivo">{y}</span>&nbsp;
+                              <span class="adattivo_mis">C</span>
+                          </div>
+                      `
+                  }
+              }, extraOptions);
+          }
+      
+          // Per tutti gli altri tipi di grafico, usiamo la configurazione standard
+          return Highcharts.merge({
+              name: ent.name || ent.entity,
+              color: ent.color || undefined,
+              data: []  
+          }, extraOptions);
+      });
+  
+      const chartType = this._getChartType();
+      const baseOptions = this._getBaseChartOptions(chartType, seriesData);
+      const typeSpecificOptions = this._getTypeSpecificOptions(chartType);
+      const globalChartOptions = this._getGlobalChartOptions();
+  
+      // Fusione finale delle opzioni
+      const finalOptions = Highcharts.merge({}, baseOptions, typeSpecificOptions, this._config.stackedOptions || {}, globalChartOptions || {});
+  
+      //console.log("🎨 Opzioni finali del grafico:", JSON.stringify(finalOptions, null, 2));
+  
+      // Creiamo il grafico
+      this._chart = Highcharts.chart(container, finalOptions);
+      //console.log("✅ Finish Render");
+  }
 
 
   render() {
@@ -417,6 +555,19 @@ class RealtimeHighHaCard extends LitElement {
           </div>
         </ha-card>
       `;
+  }
+  
+  static get styles() {
+    console.log("GET STYLES");
+    return css`
+      .adattivo {
+          font-size: clamp(16px, 8vw, 48px);
+      }
+      .adattivo_mis {
+          font-size: clamp(12px, 8vw, 18px);
+          opacity:0.4;
+      }
+      `;  
   }
 
 }
@@ -445,7 +596,7 @@ class RealtimeHighHaCardEditor extends LitElement {
   }
 
   setConfig(config) {
-      console.log("Editor: setConfig chiamato con:", config);
+      //console.log("Editor: setConfig chiamato con:", config);
       const normalizedEntities = Array.isArray(config.entity) ? config.entity : [config.entity];
   
       this._config = { ...config, entity: normalizedEntities };
@@ -475,7 +626,7 @@ class RealtimeHighHaCardEditor extends LitElement {
   _valueChanged(e) {
       const field = e.target.getAttribute("data-field");
       if (!field) return;
-      const newValue = e.target.value;
+      let newValue = e.target.value;
   
       // Creiamo una copia della configurazione per evitare modifiche dirette a oggetti immutabili
       const newConfig = { ...this._config };
@@ -488,12 +639,20 @@ class RealtimeHighHaCardEditor extends LitElement {
           newConfig.chart = { ...newConfig.chart, data_kept: parseInt(newValue) || 120 };
       } else if (field === "chart_type") {
           newConfig.chart = { ...newConfig.chart, type: newValue };
+      } else if (field === "max_value") {
+          // Assicuriamoci che sia un numero valido o null
+          const parsedValue = parseFloat(newValue);
+          newConfig.chart = { 
+              ...newConfig.chart, 
+              max_value: isNaN(parsedValue) ? null : parsedValue 
+          };
       }
   
       // Aggiorniamo la configurazione e notifichiamo il cambiamento
       this._config = newConfig;
       this._dispatchConfig();
   }
+
 
   // Aggiorna la lista di entità
   // Gestisce i cambiamenti nei parametri per ogni entità
@@ -524,8 +683,6 @@ class RealtimeHighHaCardEditor extends LitElement {
         this._dispatchConfig();
       }
     }
-
-
 
   // Aggiunge un’entità
   _addEntity() {
@@ -594,7 +751,7 @@ class RealtimeHighHaCardEditor extends LitElement {
 
     // Assicuriamoci di avere un array, così evitiamo errori di "undefined.map()"
   const availableEntities = this.comboBoxEntities || [];
-  console.log("Available entities in editor:", availableEntities);
+  //console.log("Available entities in editor:", availableEntities);
 
     return html`
       <div class="card-config">
@@ -718,6 +875,13 @@ class RealtimeHighHaCardEditor extends LitElement {
             <mwc-list-item value="standardgauge">Standard Gauge</mwc-list-item>
             <mwc-list-item value="pie">Pie</mwc-list-item>
           </ha-select>
+          
+          <ha-textfield
+            label="Max value"
+            data-field="max_value"
+            .value=${this._config.chart?.max_value ?? ""}
+            @input=${this._valueChanged}
+          ></ha-textfield>
 
           <ha-textfield
             label="Data Kept"
@@ -797,18 +961,23 @@ class RealtimeHighHaCardEditor extends LitElement {
         .delete-button {
           align-self: flex-end;
         }
+        
         mwc-button {
           margin-top: 8px;
         }
+        
+        ha-select,
         ha-textfield,
         textarea {
           display: block;
           margin-bottom: 8px;
         }
+        
         ha-formfield {
           display: block;
           margin-top: 8px;
         }
+        
         .entity-picker {
           min-height: 40px;
           display: block;
