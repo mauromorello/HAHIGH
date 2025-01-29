@@ -1,4 +1,4 @@
-const version = "0.1.7"; //Setting up... series sensors colors
+const version = "0.2.0"; //Solidgauge
 
 /********************************************************
  * Import LitElement libraries (version 2.4.0)
@@ -48,16 +48,17 @@ class RealtimeHighHaCard extends LitElement {
       title: "Realtime Chart",
       entity: [
         {
-          entity: "sensor.pzem_power",
-          name: "POWER",
-          color: "red",
+          entity: "sensor.new_sensor",
+          name: "NAME",
+          color: "",
           options: "{}"
         }
       ],
       chart: {
         type: "line",
         data_kept: 12,
-        update_interval: 5
+        update_interval: 5,
+        card_height: "100%"
       },
       config: {}
     };
@@ -72,26 +73,32 @@ class RealtimeHighHaCard extends LitElement {
           clearInterval(this._pollingTimer);
           this._pollingTimer = null;
       }
-    
-      // Manteniamo direttamente la configurazione passata, senza sovrascrivere campi
-      this._config = { ...config };
+  
+      // Manteniamo direttamente la configurazione passata, con gestione esplicita di card_height
+      this._config = { 
+          ...config, 
+          chart: { 
+              ...config.chart, 
+              card_height: config.chart?.card_height || "100%" // 🔹 Imposta un default se mancante
+          } 
+      };
   
       // Resettiamo eventuali dati precedenti
       this._lastData = null;
       this.setupComplete = false;
   
       // Imposta l'intervallo di aggiornamento (di default 5s se non specificato)
-      this.updateInterval = config.chart?.update_interval || 1;
+      this.updateInterval = this._config.chart.update_interval || 1;
   
       // Controlliamo se ci sono entità definite
-      const entitiesDefined = Array.isArray(config.entity) && config.entity.length > 0;
+      const entitiesDefined = Array.isArray(this._config.entity) && this._config.entity.length > 0;
   
-      if (!entitiesDefined){ 
+      if (!entitiesDefined) { 
           throw new Error("You must define at least one entity in the configuration.");
       }
-  
-
+      
   }
+
 
   disconnectedCallback() {
       super.disconnectedCallback();
@@ -240,30 +247,23 @@ class RealtimeHighHaCard extends LitElement {
   }
 
   async _initChart() {
-    console.log("INIT CHARTS");
     await this._loadHighcharts();
-    console.log("INIT CHARTS CAN RENDER");
-    // Costruiamo il grafico la prima volta con una serie vuota
-    //console.log(window.Highcharts)
     this._renderChart([]);
     this._startPolling();
-
   }
 
   _startPolling() {
-      //console.log("Start Polling");
       const interval = this._config.chart?.update_interval || 1;
   
       if (this._pollingTimer) {
-          //console.log("⏸️ Polling già attivo, non avvio un nuovo timer.");
-          return; // Evita di creare un nuovo polling
+          console.log("⏸️ Polling già attivo, non avvio un nuovo timer.");
+          return;
       }
   
       console.log(`Polling avviato con intervallo di ${interval} secondi`);
       this._updateData("FIRST");
-      
+  
       this._pollingTimer = setInterval(() => {
-          //console.log("Polling: aggiornamento dati...");
           this._updateData("polling");
       }, interval * 1000);
   }
@@ -299,17 +299,6 @@ class RealtimeHighHaCard extends LitElement {
                 }
             } else {
                 console.warn(`❌ La serie per ${entityId} non esiste ancora! Creazione della serie...`);
-
-                const newSeries = {
-                    name: ent.name || entityId,
-                    type: "solidgauge",
-                    data: [val],
-                    yAxis: {
-                        min: 0,
-                        max: this._config.chart?.max_value || 100
-                    }
-                };
-        
                 this._chart.addSeries(newSeries, true);
             }
           } else {
@@ -334,7 +323,8 @@ class RealtimeHighHaCard extends LitElement {
       return {
           chart: {
               type: chartType,
-              zooming: { type: "xy" }
+              zooming: { type: "xy" },
+              height:  this._config.chart?.card_height ?? "100%"
           },
           tooltip: {
               valueDecimals: 1
@@ -362,7 +352,44 @@ class RealtimeHighHaCard extends LitElement {
   
       switch (chartType) {
           case "solidgauge":
-              options.chart = { type: "solidgauge", margin: [10, 0, 5, 0], spacing: [0, 0, 0, 0] };
+            options.chart = {
+              type: "solidgauge",
+              margin: [10, 0, 5, 0],
+              spacing: [0, 0, 0, 0],
+              events: {
+                load: function () {
+                  const chartWidth = this.chartWidth;
+                  
+                  console.log("CHART SIZE: ", chartWidth);
+                  
+                  // Nuovo calcolo della font-size con una scala più accentuata
+                  let fontSize;
+                  const maxSize = 42; // Font-size massimo
+                  const minSize = 16; // Font-size minimo
+                  const maxWidth = 486; // Larghezza in cui il font è massimo
+                  const minWidth = 238; // Larghezza in cui il font è minimo
+            
+                  if (chartWidth >= maxWidth) {
+                    fontSize = maxSize;
+                  } else if (chartWidth <= minWidth) {
+                    fontSize = minSize;
+                  } else {
+                    // Calcolo con scala più accentuata
+                    fontSize = (chartWidth - minWidth) / (maxWidth - minWidth) * (maxSize - minSize) + minSize;
+                  }
+            
+                  this.series[0].update({
+                    dataLabels: {
+                      style: {
+                        fontSize: `${fontSize}px`
+                      }
+                    }
+                  }, false);
+                }
+              }
+            };
+
+
               options.pane ={
                               center: ['50%', '50%'],
                               size: '100%',
@@ -408,13 +435,12 @@ class RealtimeHighHaCard extends LitElement {
                               }
                           };
               options.legend = { enabled: false };
+              options.tooltip = { enabled: false };
               options.plotOptions = {
                                     solidgauge: {
                                         borderRadius: 3,
                                         dataLabels: {
-                                            y: 0,
-                                            borderWidth: 0,
-                                            useHTML: true
+                                            borderWidth: 0
                                             }
                                         }
                                     };
@@ -434,7 +460,7 @@ class RealtimeHighHaCard extends LitElement {
           default:
               break;
       }
-  
+      
       return options;
   }
 
@@ -458,10 +484,14 @@ class RealtimeHighHaCard extends LitElement {
   }
     
   _getGlobalChartOptions() {
-      if (!this._config.chart_options) return {};
+      const chartOptions = this._config.chart?.chartOptions;
+  
+      // Se non esiste `chartOptions`, restituiamo un oggetto vuoto per evitare errori
+      if (!chartOptions || typeof chartOptions !== "string") return {};
   
       try {
-          const func = new Function("Highcharts", "return " + this._config.chart_options);
+          // Creiamo una funzione che accetta Highcharts come argomento
+          const func = new Function("Highcharts", "return " + chartOptions);
           return func(window.Highcharts);
       } catch (e) {
           console.error("❌ Chart options parsing error:", e);
@@ -504,13 +534,13 @@ class RealtimeHighHaCard extends LitElement {
                   color: ent.color || undefined,
                   data: [0],  // Inizializza con un valore di default
                   dataLabels: {
-                      y: -70,
+                      y: -50,
                       format: `
                           <div style="text-align:center">
-                              <span class="adattivo">{y}</span>&nbsp;
-                              <span class="adattivo_mis">C</span>
+                              <span>{y:.0f}</span>
                           </div>
-                      `
+                      `,
+                      useHTML: true
                   }
               }, extraOptions);
           }
@@ -529,9 +559,7 @@ class RealtimeHighHaCard extends LitElement {
       const globalChartOptions = this._getGlobalChartOptions();
   
       // Fusione finale delle opzioni
-      const finalOptions = Highcharts.merge({}, baseOptions, typeSpecificOptions, this._config.stackedOptions || {}, globalChartOptions || {});
-  
-      //console.log("🎨 Opzioni finali del grafico:", JSON.stringify(finalOptions, null, 2));
+      const finalOptions = Highcharts.merge({}, baseOptions, typeSpecificOptions || {}, globalChartOptions || {});
   
       // Creiamo il grafico
       this._chart = Highcharts.chart(container, finalOptions);
@@ -540,7 +568,7 @@ class RealtimeHighHaCard extends LitElement {
 
 
   render() {
-      console.log("Render chiamato a:", new Date().toLocaleTimeString());
+      console.log("CARD HEIGHT: ", this._config.chart.card_height);
       if (!this._config) return html``;
   
       return html`
@@ -551,7 +579,7 @@ class RealtimeHighHaCard extends LitElement {
             </div>
           ` : ""}
   
-          <div id="chartContainer" style="width: 100%; height: ${this._config.chart_height || "100%"}; border-radius:12px;">
+          <div id="chartContainer" style="width: 100%; height: ${this._config.chart.card_height || "100%"}; border-radius:12px;">
           </div>
         </ha-card>
       `;
@@ -596,18 +624,30 @@ class RealtimeHighHaCardEditor extends LitElement {
   }
 
   setConfig(config) {
-      //console.log("Editor: setConfig chiamato con:", config);
+      // Normalizziamo la struttura delle entità per evitare problemi di compatibilità
       const normalizedEntities = Array.isArray(config.entity) ? config.entity : [config.entity];
   
-      this._config = { ...config, entity: normalizedEntities };
-  
-      // Usa la lista di entità passata dalla card principale
+      this._config = { 
+          ...config, 
+          entity: normalizedEntities, 
+          chart: { 
+              ...config.chart, 
+              card_height: config.chart?.card_height || "300px", 
+              max_value: config.chart?.max_value ?? null, 
+              chartOptions: config.chart?.chartOptions !== undefined ? config.chart.chartOptions : "{}" // 🔥 Aggiunto controllo esplicito
+          } 
+      };
+      
       if (!this.comboBoxEntities || this.comboBoxEntities.length === 0) {
-          this.comboBoxEntities = this.hass ? Object.keys(this.hass.states).filter((e) => e.startsWith("sensor.")) : [];
+          if (this.hass && this.hass.states) {
+              this.comboBoxEntities = Object.keys(this.hass.states).filter(e => e.startsWith("sensor."));
+              console.log("📌 Lista entità aggiornata:", this.comboBoxEntities);
+          }
       }
   
       this.requestUpdate();
   }
+
 
   get config() {
     return this._config;
@@ -639,50 +679,56 @@ class RealtimeHighHaCardEditor extends LitElement {
           newConfig.chart = { ...newConfig.chart, data_kept: parseInt(newValue) || 120 };
       } else if (field === "chart_type") {
           newConfig.chart = { ...newConfig.chart, type: newValue };
+      } else if (field === "card_height") {
+          newConfig.chart = { ...newConfig.chart, card_height: newValue || "100%" };
       } else if (field === "max_value") {
-          // Assicuriamoci che sia un numero valido o null
           const parsedValue = parseFloat(newValue);
           newConfig.chart = { 
               ...newConfig.chart, 
               max_value: isNaN(parsedValue) ? null : parsedValue 
+          };
+      } else if (field === "chartOptions") {  
+          newConfig.chart = { 
+              ...newConfig.chart, 
+              chartOptions: newValue // Mantiene la stringa senza convertirla in JSON
           };
       }
   
       // Aggiorniamo la configurazione e notifichiamo il cambiamento
       this._config = newConfig;
       this._dispatchConfig();
+      console.log("NEW CONFIG:", newConfig);
   }
-
 
   // Aggiorna la lista di entità
   // Gestisce i cambiamenti nei parametri per ogni entità
   // Aggiorna la lista di entità (es. nome, colore, ecc.)
-    _entityChanged(e) {
-      if (!this._config) return;
-  
-      const target = e.target;
-      const index = parseInt(target.getAttribute("data-index"), 10);
-      const field = target.getAttribute("data-field");
-      if (isNaN(index) || !field) return;
-  
-      // ha-combo-box di solito invia il nuovo valore in e.detail.value
-      // facciamo un fallback su target.value se necessario
-      const newValue = e.detail?.value ?? target.value;
-  
-      // Creiamo una copia dell'array di entità
-      const newEntities = [...this._config.entity];
-      const updatedEntity = { ...newEntities[index] };
-  
-      // Aggiorna solo il campo modificato
-      updatedEntity[field] = newValue;
-      newEntities[index] = updatedEntity;
-  
-      // Se la config è cambiata, aggiorniamo e notifichiamo
-      if (JSON.stringify(newEntities) !== JSON.stringify(this._config.entity)) {
-        this._config = { ...this._config, entity: newEntities };
-        this._dispatchConfig();
-      }
+  _entityChanged(e) {
+    if (!this._config) return;
+
+    const target = e.target;
+    const index = parseInt(target.getAttribute("data-index"), 10);
+    const field = target.getAttribute("data-field");
+    if (isNaN(index) || !field) return;
+
+    // ha-combo-box di solito invia il nuovo valore in e.detail.value
+    // facciamo un fallback su target.value se necessario
+    const newValue = e.detail?.value ?? target.value;
+
+    // Creiamo una copia dell'array di entità
+    const newEntities = [...this._config.entity];
+    const updatedEntity = { ...newEntities[index] };
+
+    // Aggiorna solo il campo modificato
+    updatedEntity[field] = newValue;
+    newEntities[index] = updatedEntity;
+
+    // Se la config è cambiata, aggiorniamo e notifichiamo
+    if (JSON.stringify(newEntities) !== JSON.stringify(this._config.entity)) {
+      this._config = { ...this._config, entity: newEntities };
+      this._dispatchConfig();
     }
+  }
 
   // Aggiunge un’entità
   _addEntity() {
@@ -877,6 +923,13 @@ class RealtimeHighHaCardEditor extends LitElement {
           </ha-select>
           
           <ha-textfield
+            label="Card Height"
+            data-field="card_height"
+            .value=${this._config.chart?.card_height ?? "300px"}
+            @input=${this._valueChanged}
+          ></ha-textfield>
+          
+          <ha-textfield
             label="Max value"
             data-field="max_value"
             .value=${this._config.chart?.max_value ?? ""}
@@ -896,34 +949,31 @@ class RealtimeHighHaCardEditor extends LitElement {
             .value=${this._config.chart?.update_interval ?? 5}
             @input=${this._valueChanged}
           ></ha-textfield>
-        </div>
-
-        <!-- ADVANCED TAB -->
-        <div class="section" style="display:${this.activeTab === "advanced" ? "block" : "none"};">
+      </div>    
+      
+      <!-- ADVANCED TAB -->
+      <div class="section"  style="display:${this.activeTab === "advanced" ? "block" : "none"};">
           <h4>Advanced Highcharts Config</h4>
-          <p>Opzioni aggiuntive da mergiare (JSON o funzione JS). Ad esempio: <code>{ "yAxis": { "max": 100 } }</code></p>
           <label class="mdc-text-field mdc-text-field--outlined mdc-text-field--textarea">
-            <span class="mdc-notched-outline">
-              <span class="mdc-notched-outline__leading"></span>
-              <span class="mdc-floating-label">Highcharts config</span>
-              <span class="mdc-notched-outline__trailing"></span>
-            </span>
-            <span class="mdc-text-field__resizer">
-              <textarea
-                class="mdc-text-field__input"
-                rows="6"
-                style="width: 100%;"
-                .value=${JSON.stringify(this._config.config || {}, null, 2)}
-                @input=${(e) => {
-                  try {
-                    this._config.config = JSON.parse(e.target.value);
-                    this._dispatchConfig();
-                  } catch {
-                    // se non è JSON valido, ignoriamo
-                  }
-                }}
-              ></textarea>
-            </span>
+              <span class="mdc-notched-outline">
+                  <span class="mdc-notched-outline__leading"></span>
+                  <span class="mdc-floating-label">Highcharts series options 
+                      <small><a href="https://api.highcharts.com/highcharts/series" target="_blank">API here</a></small>
+                  </span>
+                  <span class="mdc-notched-outline__trailing"></span>
+              </span>
+              <span class="mdc-text-field__resizer">
+                  <textarea
+                      class="mdc-text-field__input"
+                      spellcheck="false"
+                      rows="8"
+                      cols="40"
+                      style="width:100% !important;"
+                      aria-label="chartOptions"
+                      data-field="chartOptions"
+                      @input=${this._valueChanged}
+                  >${this._config.chart?.chartOptions || "{}"}</textarea>
+              </span>
           </label>
         </div>
       </div>
