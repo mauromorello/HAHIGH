@@ -1,4 +1,4 @@
-const version = "0.2.0"; //Solidgauge
+const version = "0.2.1"; //Ok update intervals, show legend, uMeasure
 
 /********************************************************
  * Import LitElement libraries (version 2.4.0)
@@ -14,9 +14,9 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: "realtime-highha-card",
   name: "Realtime High HA Card",
-  description: "Visualizza dati in tempo reale...",
+  description: "Realtime HA data with Highcharts Graph",
   // Facoltativo, per avere l’anteprima:
-  preview: true
+  //preview: true
 });
 
 /******************************************************
@@ -26,7 +26,6 @@ window.customCards.push({
 class RealtimeHighHaCard extends LitElement {
 
   static get properties() {
-    //console.log("getProprieties");
     return {
       _config: { type: Object },
       _chart: { type: Object },
@@ -35,7 +34,6 @@ class RealtimeHighHaCard extends LitElement {
   }
 
   static getConfigElement() {
-      //console.log("Create Element");
       const editor = document.createElement("realtime-highha-card-editor");
       editor.comboBoxEntities = this.comboBoxEntities || []; // Passiamo la lista di sensori all'editor
       this._editor = editor; // Salviamo un riferimento per aggiornamenti futuri
@@ -43,7 +41,7 @@ class RealtimeHighHaCard extends LitElement {
   }
 
   static getStubConfig() {
-    console.log("getStubConfig");
+ 
     return {
       title: "Realtime Chart",
       entity: [
@@ -51,6 +49,7 @@ class RealtimeHighHaCard extends LitElement {
           entity: "sensor.new_sensor",
           name: "NAME",
           color: "",
+          uMeasure: "",
           options: "{}"
         }
       ],
@@ -65,11 +64,11 @@ class RealtimeHighHaCard extends LitElement {
   }
 
   setConfig(config) {
-      //console.log("Card: setConfig chiamato con:", config);
+
       
       // Ferma il polling attuale se esiste
       if (this._pollingTimer) {
-          console.log("🛑 Config cambiata: fermo il polling precedente.");
+
           clearInterval(this._pollingTimer);
           this._pollingTimer = null;
       }
@@ -100,15 +99,15 @@ class RealtimeHighHaCard extends LitElement {
   }
 
 
+  connectedCallback() {
+      super.connectedCallback();
+      this._startPolling();
+  }
+  
   disconnectedCallback() {
       super.disconnectedCallback();
-      //console.log("❌ Card rimossa: sto fermando il polling!");
-      
-      if (this._pollingTimer) {
-          clearInterval(this._pollingTimer);
-          this._pollingTimer = null;
-      }
-  }  
+      this._stopPolling();
+  }
 
   set hass(newHass) {
 
@@ -119,19 +118,18 @@ class RealtimeHighHaCard extends LitElement {
           if (newHass.states) {
               this.comboBoxEntities = Object.keys(newHass.states).filter(e => e.startsWith("sensor."));
               this.requestUpdate(); 
-              // console.log("Popolata comboBoxEntities con sensori:", this.comboBoxEntities);
+
           }
       }
   
       if (!this._config || !this._config.entity?.length) {
-        //console.log("NO CONFIG HASS");
         return;
       }
   
       if (!this._hass) {
         this._hass = newHass;
         this._updateData("HASS");
-        //console.log("UPDATE DATA HASS");
+
         return;
       }
   
@@ -139,7 +137,6 @@ class RealtimeHighHaCard extends LitElement {
       let changed = false;
   
       for (const ent of relevantEntities) {
-        //console.log("RELEVANT ENTITY HASS", ent);
         const oldState = this._hass.states[ent];
         const newState = newHass.states[ent];
         if (!oldState || !newState) continue;
@@ -156,72 +153,83 @@ class RealtimeHighHaCard extends LitElement {
   }
 
   async _loadHighcharts() {
-      return new Promise(async (resolve, reject) => {
-          // Se Highcharts è già caricato, assicuriamoci che i moduli aggiuntivi siano presenti
-          if (window.Highcharts) {
-              //console.log("🔄 Highcharts già caricato, verifico i moduli...");
+      // Se un caricamento è già in corso, aspettiamo
+      if (window._highchartsLoading) {
+          return window._highchartsLoading;
+      }
   
-              // Controllo se mancano i moduli aggiuntivi
-              const missingModules = [];
-              if (!window.Highcharts.seriesTypes.solidgauge) {
-                  missingModules.push("https://code.highcharts.com/modules/solid-gauge.js");
-              }
-              if (!window.Highcharts.seriesTypes.pie) {
-                  missingModules.push("https://code.highcharts.com/highcharts-more.js");
-              }
+      // 🔍 **Controlliamo se Highstock è caricato**
+      const isHighstockLoaded = !!(window.Highcharts && window.Highcharts.stockChart);
   
-              // Carica solo i moduli mancanti
-              if (missingModules.length > 0) {
-                  //console.log("📥 Caricamento moduli mancanti:", missingModules);
-                  for (const src of missingModules) {
-                      await this._loadScript(src);
-                  }
-              } else {
-                  console.log("✅ Tutti i moduli necessari sono già presenti.");
-              }
+      // Se Highstock è caricato, forziamo il caricamento della versione "pura" di Highcharts
+      if (isHighstockLoaded) {
+          delete window.Highcharts;  // Eliminazione della versione di Highcharts già presente
+      }
+  
+      // Se Highcharts e solidgauge sono già caricati, esci subito
+      if (window.Highcharts && window.Highcharts.seriesTypes.solidgauge) {
+          return Promise.resolve();
+      }
+  
+      // Imposta un flag per evitare caricamenti multipli
+      window._highchartsLoading = new Promise(async (resolve, reject) => {
+  
+  
+          try {
+              // 🔥 **Se Highstock era caricato, ricarichiamo Highcharts da zero**
+              await this._loadScript("https://code.highcharts.com/highcharts.js");
+  
+              // 🔥 Aspettiamo che Highcharts sia DEFINITIVAMENTE pronto prima di continuare
+              await this._ensureHighchartsLoaded();
+  
+              // 🔥 Carichiamo i moduli necessari
+              await this._loadScript("https://code.highcharts.com/highcharts-more.js");
+              await this._loadScript("https://code.highcharts.com/modules/solid-gauge.js");
+  
+              // 🔥 Verifichiamo che solidgauge sia correttamente registrato
+              await this._waitForSolidGauge();
+  
   
               resolve();
-              return;
+          } catch (error) {
+  
+              reject(error);
+          } finally {
+              window._highchartsLoading = null; // Reset del flag dopo il caricamento
           }
-  
-          // Se un altro script è già in fase di caricamento, aspettiamo
-          if (window._highchartsLoading) {
-              //console.log("⏳ Attesa caricamento Highcharts già in corso...");
-              window._highchartsLoading.then(resolve).catch(reject);
-              return;
-          }
-  
-          // Impostiamo un flag per evitare caricamenti multipli simultanei
-          window._highchartsLoading = new Promise(async (loadResolve, loadReject) => {
-              const scripts = [
-                  "https://code.highcharts.com/highcharts.js",
-                  "https://code.highcharts.com/highcharts-more.js",
-                  "https://code.highcharts.com/modules/solid-gauge.js"
-              ];
-  
-              console.log("📥 Inizio caricamento Highcharts e moduli...");
-  
-              try {
-                  for (const src of scripts) {
-                      await this._loadScript(src);
-                  }
-                  //console.log("🎯 Tutti gli script di Highcharts caricati con successo!");
-                  loadResolve();
-              } catch (error) {
-                  //console.error("❌ Errore nel caricamento degli script Highcharts:", error);
-                  loadReject(error);
-              }
-          });
-  
-          // Aspettiamo il caricamento prima di risolvere la funzione principale
-          window._highchartsLoading.then(resolve).catch(reject);
       });
+  
+      return window._highchartsLoading;
+  }
+
+  async _ensureHighchartsLoaded() {
+      let attempts = 0;
+      while (!window.Highcharts && attempts < 20) { // Attesa massima 2 secondi
+  
+          await new Promise(res => setTimeout(res, 100));
+          attempts++;
+      }
   }
   
+  async _waitForSolidGauge() {
+      let attempts = 0;
+      while (!window.Highcharts.seriesTypes.solidgauge && attempts < 20) { // Attesa massima 2 secondi
+          console.log("🔄 Attesa registrazione modulo solidgauge...");
+          await new Promise(res => setTimeout(res, 100));
+          attempts++;
+      }
+  
+      if (window.Highcharts.seriesTypes.solidgauge) {
+          console.log("✅ Modulo solidgauge registrato correttamente.");
+      } else {
+          throw new Error("❌ Il modulo solidgauge non è stato registrato dopo il caricamento!");
+      }
+  }
+
   _loadScript(src) {
       return new Promise((resolve, reject) => {
           if (document.querySelector(`script[src="${src}"]`)) {
-              //console.log(`🔄 Il modulo ${src} è già stato caricato.`);
+              console.log(`🔄 Il modulo ${src} è già stato caricato.`);
               resolve();
               return;
           }
@@ -234,46 +242,56 @@ class RealtimeHighHaCard extends LitElement {
               resolve();
           };
           script.onerror = () => {
-              //console.error(`❌ Errore nel caricamento di: ${src}`);
+              console.error(`❌ Errore nel caricamento di: ${src}`);
               reject();
           };
           document.head.appendChild(script);
       });
   }
 
+
+ 
+
+
   firstUpdated() {
     this._initChart();
-    console.log("First Updated");
+    //console.log("First Updated");
   }
 
   async _initChart() {
-    await this._loadHighcharts();
+    console.log("INIT CHART");
+    await this._loadHighcharts(true);
     this._renderChart([]);
     this._startPolling();
+    this._updateData("INIT")
   }
 
   _startPolling() {
-      const interval = this._config.chart?.update_interval || 1;
-  
       if (this._pollingTimer) {
-          console.log("⏸️ Polling già attivo, non avvio un nuovo timer.");
           return;
       }
   
-      console.log(`Polling avviato con intervallo di ${interval} secondi`);
-      this._updateData("FIRST");
+      const interval = this._config.chart?.update_interval || 1;
   
       this._pollingTimer = setInterval(() => {
           this._updateData("polling");
       }, interval * 1000);
   }
+  
+  _stopPolling() {
+      if (this._pollingTimer) {
+          clearInterval(this._pollingTimer);
+          this._pollingTimer = null;
+      }
+  }
+
 
   _updateData(source = "unknown") {
-      //console.log(`🔄 _updateData chiamato da ${source}`);
+      
       if (!this._hass || !this._chart || !this._config.entity) return;
   
       const chartType = this._getChartType();
-      //console.log(`📢 Chart Type rilevato: ${chartType}`);
+
   
       this._config.entity.forEach((ent, index) => {
           const entityId = ent.entity;
@@ -283,22 +301,22 @@ class RealtimeHighHaCard extends LitElement {
           const val = parseFloat(stateObj.state);
           if (isNaN(val)) return;
   
-          //console.log(`📊 Nuovo dato per ${entityId}: ${val} (Origine: ${source})`);
+
   
           if (chartType === "solidgauge") {
-            //console.log(`⚡ [SOLIDGAUGE] Tentativo di aggiornare il valore per ${entityId}: ${val}`);
+
         
             if (this._chart.series[index]) {
-                //console.log(`✅ Serie trovata per ${entityId}:`, this._chart.series[index]);
+
         
                 if (this._chart.series[index].points[0]) {
-                    //console.log(`⏫ Aggiornamento valore Solid Gauge per ${entityId}: ${val}`);
+
                     this._chart.series[index].points[0].update(val, true, false);
                 } else {
                     this._chart.series[index].setData([val], true);
                 }
             } else {
-                console.warn(`❌ La serie per ${entityId} non esiste ancora! Creazione della serie...`);
+
                 this._chart.addSeries(newSeries, true);
             }
           } else {
@@ -307,7 +325,7 @@ class RealtimeHighHaCard extends LitElement {
               const keep = this._config.chart?.data_kept || 120;
   
               if (!this._chart.series[index]) {
-                  console.warn(`❌ La serie per ${entityId} non esiste ancora! Creazione della serie...`);
+
                   this._chart.addSeries({ name: ent.name || entityId, data: [] }, true);
               }
               this._chart.series[index].addPoint(
@@ -330,7 +348,7 @@ class RealtimeHighHaCard extends LitElement {
               valueDecimals: 1
           },
           legend: {
-              enabled: this._config.legend === true
+              enabled: this._config.chart?.legend === true
           },
           credits: {
               enabled: false
@@ -360,7 +378,7 @@ class RealtimeHighHaCard extends LitElement {
                 load: function () {
                   const chartWidth = this.chartWidth;
                   
-                  console.log("CHART SIZE: ", chartWidth);
+
                   
                   // Nuovo calcolo della font-size con una scala più accentuata
                   let fontSize;
@@ -476,8 +494,8 @@ class RealtimeHighHaCard extends LitElement {
           "areastackedpercent": "area",
           "barstacked": "bar",
           "columnstacked": "column",
-          "pie": "pie", // Assicuriamoci che il tipo "pie" sia incluso
-          "solidgauge": "solidgauge"  // 🔥 Deve essere esplicitamente incluso!
+          "pie": "pie", 
+          "solidgauge": "solidgauge"  
       };
   
       return chartTypeMap[chartType] || chartType;
@@ -504,7 +522,7 @@ class RealtimeHighHaCard extends LitElement {
     // RENDER ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     
   _renderChart() {
-      console.log("⚙️ _renderChart called with config:", this._config);
+
   
       if (!window.Highcharts) {
           this._loadHighcharts().then(() => this._renderChart());
@@ -537,7 +555,7 @@ class RealtimeHighHaCard extends LitElement {
                       y: -50,
                       format: `
                           <div style="text-align:center">
-                              <span>{y:.0f}</span>
+                              <span>{y:.0f}</span>&nbsp;<small style="color: #888888; font-size: 16px;">${ent.uMeasure !== undefined ? ent.uMeasure : ""}</small>
                           </div>
                       `,
                       useHTML: true
@@ -563,12 +581,12 @@ class RealtimeHighHaCard extends LitElement {
   
       // Creiamo il grafico
       this._chart = Highcharts.chart(container, finalOptions);
-      //console.log("✅ Finish Render");
+
   }
 
 
   render() {
-      console.log("CARD HEIGHT: ", this._config.chart.card_height);
+
       if (!this._config) return html``;
   
       return html`
@@ -586,7 +604,7 @@ class RealtimeHighHaCard extends LitElement {
   }
   
   static get styles() {
-    console.log("GET STYLES");
+
     return css`
       .adattivo {
           font-size: clamp(16px, 8vw, 48px);
@@ -641,7 +659,7 @@ class RealtimeHighHaCardEditor extends LitElement {
       if (!this.comboBoxEntities || this.comboBoxEntities.length === 0) {
           if (this.hass && this.hass.states) {
               this.comboBoxEntities = Object.keys(this.hass.states).filter(e => e.startsWith("sensor."));
-              console.log("📌 Lista entità aggiornata:", this.comboBoxEntities);
+
           }
       }
   
@@ -681,6 +699,8 @@ class RealtimeHighHaCardEditor extends LitElement {
           newConfig.chart = { ...newConfig.chart, type: newValue };
       } else if (field === "card_height") {
           newConfig.chart = { ...newConfig.chart, card_height: newValue || "100%" };
+      } else if (field === "legend") {
+          newConfig.chart = { ...newConfig.chart, legend: e.target.checked };    
       } else if (field === "max_value") {
           const parsedValue = parseFloat(newValue);
           newConfig.chart = { 
@@ -697,7 +717,7 @@ class RealtimeHighHaCardEditor extends LitElement {
       // Aggiorniamo la configurazione e notifichiamo il cambiamento
       this._config = newConfig;
       this._dispatchConfig();
-      console.log("NEW CONFIG:", newConfig);
+
   }
 
   // Aggiorna la lista di entità
@@ -740,6 +760,7 @@ class RealtimeHighHaCardEditor extends LitElement {
         entity: "sensor.new_sensor",
         name: "",
         color: "",
+        uMeasure: "",
         options: "{}"
       }
     ];
@@ -797,7 +818,7 @@ class RealtimeHighHaCardEditor extends LitElement {
 
     // Assicuriamoci di avere un array, così evitiamo errori di "undefined.map()"
   const availableEntities = this.comboBoxEntities || [];
-  //console.log("Available entities in editor:", availableEntities);
+
 
     return html`
       <div class="card-config">
@@ -851,6 +872,15 @@ class RealtimeHighHaCardEditor extends LitElement {
                         data-index=${index}
                         @input=${(e) => this._entityChanged(e)}
                     ></ha-textfield>
+
+                    <ha-textfield
+                        label="U Measure"
+                        .value=${ent.uMeasure || ""}
+                        data-field="uMeasure"
+                        data-index=${index}
+                        @input=${(e) => this._entityChanged(e)}
+                    ></ha-textfield>                    
+                    
 
                     <ha-formfield label="Show advanced options" style="margin-bottom:10px;">
                         <ha-switch
@@ -949,6 +979,15 @@ class RealtimeHighHaCardEditor extends LitElement {
             .value=${this._config.chart?.update_interval ?? 5}
             @input=${this._valueChanged}
           ></ha-textfield>
+          
+          <ha-formfield label="Show legend">
+            <ha-switch
+              data-field="legend"
+              .checked=${this._config.chart.legend === true}
+              @change=${this._valueChanged}
+            ></ha-switch>
+          </ha-formfield>
+          
       </div>    
       
       <!-- ADVANCED TAB -->
