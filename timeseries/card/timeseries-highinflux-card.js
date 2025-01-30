@@ -1,4 +1,4 @@
-const version = "0.8.5"; //Selector (Highstock)
+const version = "0.8.9"; //Tolto gauges
 
 /********************************************************
  * Import LitElement libraries (version 2.4.0)
@@ -61,7 +61,8 @@ class TimeseriesHighInfluxCard extends LitElement {
       influx_url: "http://localhost:8086",
       influx_db: "mydb",
       influx_user: "admin",
-      influx_password: "password"
+      influx_password: "password",
+      updateInterval: 60
     };
   }
 
@@ -85,7 +86,7 @@ class TimeseriesHighInfluxCard extends LitElement {
     const entitiesDefined =
       Array.isArray(config.entities) && config.entities.length > 0;
 
-    if (!singleQueryDefined && !entitiesDefined) {
+    if (!entitiesDefined) {
       throw new Error(
         "You must define either a set of entities (entities) or the single parameters (influx_url, influx_db, etc.)."
       );
@@ -133,7 +134,6 @@ class TimeseriesHighInfluxCard extends LitElement {
         this._hass = hass;
 
         if (!this._hass.states) {
-            console.warn("⚠️ `hass.states` non è disponibile! Riproverò più tardi.");
             return;
         }
 
@@ -170,7 +170,7 @@ class TimeseriesHighInfluxCard extends LitElement {
   
           <div
             id="chartContainer"
-            style="width: 100%; height: ${this._config.chart_height || "100%"};"
+            style="width: 100%; height: ${this._config.chart_height || "100%"}; border-radius:12px;"
           >
           </div>
         </ha-card>
@@ -252,7 +252,8 @@ class TimeseriesHighInfluxCard extends LitElement {
           // Se serve altro
           const scripts = [
 
-              "https://code.highcharts.com/stock/highstock.js"
+              "https://code.highcharts.com/stock/highstock.js",
+
           ];
   
           // Carica tutti gli script in parallelo
@@ -282,69 +283,69 @@ class TimeseriesHighInfluxCard extends LitElement {
    * - Multiple entities (config.entities)
    */
   async _fetchData() {
-  const config = this._config;
-  const entitiesDefined = Array.isArray(config.entities) && config.entities.length > 0;
-
-
-  if (entitiesDefined) {
-    // Multiple entities => multiple queries
-    try {
-      const allSeriesData = await Promise.all(
-        config.entities.map((entity) => this._fetchEntityData(entity))
-      );
-
-      // Costruiamo la serie per ogni entity
-      const chartSeries = allSeriesData.map((dataObj, i) => {
-        // Valori base della serie
-        const baseSeries = {
-          name: config.entities[i].name || null,
-          color: config.entities[i].color || null,
-          data: dataObj.parsedData,
-          tooltip: {
-            valueSuffix: config.entities[i].unita_misura
-              ? ` ${config.entities[i].unita_misura}`
-              : ""
-          }
-        };
-
-        // Se ci sono opzioni extra, tentiamo di fare il parse del JSON
-        let extraOptions = {};
-        if (config.entities[i].options && typeof config.entities[i].options === "string") {
-          try {
-            const code = config.entities[i].options;
+    const config = this._config;
+    const entitiesDefined = Array.isArray(config.entities) && config.entities.length > 0;
+  
+  
+    if (entitiesDefined) {
+      // Multiple entities => multiple queries
+      try {
+        const allSeriesData = await Promise.all(
+          config.entities.map((entity) => this._fetchEntityData(entity))
+        );
+  
+        // Costruiamo la serie per ogni entity
+        const chartSeries = allSeriesData.map((dataObj, i) => {
+          // Valori base della serie
+          const baseSeries = {
+            name: config.entities[i].name || null,
+            color: config.entities[i].color || null,
+            data: dataObj.parsedData,
+            tooltip: {
+              valueSuffix: config.entities[i].unita_misura
+                ? ` ${config.entities[i].unita_misura}`
+                : ""
+            }
+          };
+  
+          // Se ci sono opzioni extra, tentiamo di fare il parse del JSON
+          let extraOptions = {};
+          if (config.entities[i].options && typeof config.entities[i].options === "string") {
             try {
-              // Passa l'oggetto Highcharts alla funzione 
-              const func = new Function("Highcharts", "return " + code);
-              extraOptions = func(window.Highcharts);
+              const code = config.entities[i].options;
+              try {
+                // Passa l'oggetto Highcharts alla funzione 
+                const func = new Function("Highcharts", "return " + code);
+                extraOptions = func(window.Highcharts);
+              } catch (e) {
+  
+                this._queryError = `Wrong chart options;`;
+                extraOptions = {};
+              }
+   
             } catch (e) {
-
-              this._queryError = `Wrong chart options;`;
+  
+              this._queryError = `Configuration not valid in serie #${i};`;
               extraOptions = {};
             }
- 
-          } catch (e) {
-
-            this._queryError = `Configuration not valid in serie #${i};`;
-            extraOptions = {};
           }
+  
+          return Highcharts.merge(baseSeries, extraOptions);
+        });
+  
+        // Se i dati sono cambiati, rilanciamo il rendering
+        if (JSON.stringify(chartSeries) !== JSON.stringify(this._lastData)) {
+          this._lastData = chartSeries;
+          this._renderChart(chartSeries);
         }
-
-        return Highcharts.merge(baseSeries, extraOptions);
-      });
-
-      // Se i dati sono cambiati, rilanciamo il rendering
-      if (JSON.stringify(chartSeries) !== JSON.stringify(this._lastData)) {
-        this._lastData = chartSeries;
-        this._renderChart(chartSeries);
+      } catch (error) {
+        this._queryError = `Error fetching data`;
       }
-    } catch (error) {
-      this._queryError = `Error fetching data`;
+    } else {
+      // Single-query mode
+      this._queryError = `Need to define at least 1 entity!`;
     }
-  } else {
-    // Single-query mode
-    this._queryError = `Need to define at least 1 entity!`;
   }
-}
 
   /**
    * Utility function to fetch data for a single entity
@@ -353,7 +354,7 @@ class TimeseriesHighInfluxCard extends LitElement {
   async _fetchEntityData(entity) {
       const config = this._config;
       if (!entity.query) {
-          this._queryError = "❌ Query non valid;"
+          this._queryError = "Query not valid;"
           this.requestUpdate();
           return { parsedData: [] };
       }
