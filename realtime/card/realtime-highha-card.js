@@ -1,4 +1,4 @@
-const version = "0.2.1"; //Ok update intervals, show legend, uMeasure
+const version = "0.2.2"; //Pie data
 
 /********************************************************
  * Import LitElement libraries (version 2.4.0)
@@ -249,10 +249,6 @@ class RealtimeHighHaCard extends LitElement {
       });
   }
 
-
- 
-
-
   firstUpdated() {
     this._initChart();
     //console.log("First Updated");
@@ -291,6 +287,52 @@ class RealtimeHighHaCard extends LitElement {
       if (!this._hass || !this._chart || !this._config.entity) return;
   
       const chartType = this._getChartType();
+
+      if (chartType === "pie") {
+          let pieData = [];
+      
+          this._config.entity.forEach((ent, index) => {
+              const entityId = ent.entity;
+              if (!entityId || !this._hass.states[entityId]) return;
+      
+              const stateObj = this._hass.states[entityId];
+              const val = parseFloat(stateObj.state);
+              if (isNaN(val)) return;
+      
+              // Aggiungiamo i dati per ogni entità con nome, valore, colore e unità di misura
+              pieData.push({
+                  name: ent.name || entityId,
+                  y: val,
+                  color: ent.color || undefined, // Usa il colore se definito
+                  uMeasure: ent.uMeasure || ""  // Usa l'unità di misura o stringa vuota
+              });
+          });
+      
+          if (this._chart.series[0]) {
+              // 🔥 Evitiamo il setData se i dati sono identici
+              const currentData = this._chart.series[0].data.map(point => point.y);
+              const newData = pieData.map(point => point.y);
+      
+              if (JSON.stringify(currentData) !== JSON.stringify(newData)) {
+                  this._chart.series[0].setData(pieData, true);
+              }
+          } else {
+              // 🔥 Creiamo la serie pie solo se non esiste
+              this._chart.addSeries({
+                  name: "Pie Chart",
+                  data: pieData,
+                  type: "pie",
+                  tooltip: {
+                      pointFormatter: function () {
+                          return `<b>${this.name}</b>: ${this.y} ${this.uMeasure}`;
+                      }
+                  }
+              }, true);
+          }
+      
+          return; // Uscita anticipata per evitare il resto del codice
+      }
+
 
   
       this._config.entity.forEach((ent, index) => {
@@ -471,6 +513,12 @@ class RealtimeHighHaCard extends LitElement {
   
           case "pie":
               options.chart = { type: "pie" };
+              options.plotOptions = {
+                                      pie: {
+                                          borderWidth: 0,         
+                                          innerSize: "0%",       
+                                      }
+                                    };
               delete options.xAxis;
               delete options.yAxis;
               break;
