@@ -1,4 +1,4 @@
-const version = "0.2.2"; //Pie data
+const version = "0.2.4"; //Slow load
 
 /********************************************************
  * Import LitElement libraries (version 2.4.0)
@@ -24,6 +24,11 @@ window.customCards.push({
  * - getConfigElement() e getStubConfig() per l’editor
  ******************************************************/
 class RealtimeHighHaCard extends LitElement {
+
+  constructor() {
+      super();
+      this._chartInitialized = false; // 🔥 Flag per evitare doppio redraw
+  }
 
   static get properties() {
     return {
@@ -255,11 +260,15 @@ class RealtimeHighHaCard extends LitElement {
   }
 
   async _initChart() {
-    console.log("INIT CHART");
-    await this._loadHighcharts(true);
-    this._renderChart([]);
-    this._startPolling();
-    this._updateData("INIT")
+      console.log("INIT CHART");
+      await this._loadHighcharts(true);
+      this._renderChart([]);
+      
+      setTimeout(() => { // 🔥 Ritarda il primo update per evitare doppio disegno
+          this._chartInitialized = true;
+          this._updateData("INIT");
+          this._startPolling();
+      }, 300); // Aspetta 300ms per evitare race condition
   }
 
   _startPolling() {
@@ -287,6 +296,43 @@ class RealtimeHighHaCard extends LitElement {
       if (!this._hass || !this._chart || !this._config.entity) return;
   
       const chartType = this._getChartType();
+      
+      //if (chartType === "line" || chartType === "pie") {
+      if (!this._chartInitialized) return; // 🔥 Evita aggiornamenti prematuri
+      //}
+      
+      if (chartType === "multiplegauge") {
+          this._config.entity.forEach((ent, index) => {
+              const entityId = ent.entity;
+              if (!entityId || !this._hass.states[entityId]) return;
+      
+              const stateObj = this._hass.states[entityId];
+              const val = parseFloat(stateObj.state);
+              if (isNaN(val)) return;
+      
+              if (this._chart.series[index]) {
+                  // 🔥 Se la serie esiste, aggiorna solo il valore
+                  if (this._chart.series[index].points[0]) {
+                      this._chart.series[index].points[0].update(val, false);
+                  } else {
+                      this._chart.series[index].setData([val], false);
+                  }
+              } else {
+                  // 🔥 Se la serie non esiste, la creiamo
+                  const newSeries = {
+                      name: ent.name || entityId,
+                      data: [{ y: val, radius: `${112 - index * 25}%`, innerRadius: `${88 - index * 25}%` }],
+                      color: ent.color || Highcharts.getOptions().colors[index % Highcharts.getOptions().colors.length]
+                  };
+                  this._chart.addSeries(newSeries, false);
+              }
+          });
+      
+          this._chart.redraw();
+          return;
+      }
+
+
 
       if (chartType === "pie") {
           let pieData = [];
@@ -409,6 +455,7 @@ class RealtimeHighHaCard extends LitElement {
 
   _getTypeSpecificOptions(chartType) {
       const options = {};
+       const maxValue = this._config.chart?.max_value ?? 100;
   
       switch (chartType) {
           case "solidgauge":
@@ -445,6 +492,7 @@ class RealtimeHighHaCard extends LitElement {
                       }
                     }
                   }, false);
+                  this.redraw();
                 }
               }
             };
@@ -506,10 +554,47 @@ class RealtimeHighHaCard extends LitElement {
                                     };
               break;
   
-          case "bullet":
-              options.chart = { type: "bullet" };
-              options.plotOptions = { series: { pointPadding: 0.25, groupPadding: 0 } };
+          case "multiplegauge":
+              options.chart = {
+                  type: "solidgauge"
+              };
+          
+              options.pane = {
+                  startAngle: 0,
+                  endAngle: 360
+              };
+          
+              options.yAxis = {
+                  min: 0,
+                  max: this._config.chart?.max_value !== undefined ? this._config.chart.max_value : null,
+                  stops: [
+                      [0.1, '#55BF3B'], // green
+                      [0.5, '#DDDF0D'], // yellow
+                      [0.9, '#DF5353'] // red
+                  ],
+                  lineWidth: 1,
+                  tickWidth: 2,
+                  minorTickInterval: null,
+                  tickAmount: 4,                  
+                  lineWidth: 1,
+                  //tickPositions: []
+              };
+          
+              options.plotOptions = {
+                  solidgauge: {
+                      dataLabels: { enabled: true},
+                      linecap: "round",
+                      stickyTracking: false,
+                      rounded: false
+                  }
+              };
+          
+              options.series = [
+
+              ];
+          
               break;
+
   
           case "pie":
               options.chart = { type: "pie" };
@@ -996,7 +1081,7 @@ class RealtimeHighHaCardEditor extends LitElement {
             <mwc-list-item value="area">Area</mwc-list-item>
             <mwc-list-item value="areaspline">Area Spline</mwc-list-item>
             <mwc-list-item value="solidgauge">Solid Gauge</mwc-list-item>
-            <mwc-list-item value="standardgauge">Standard Gauge</mwc-list-item>
+            <mwc-list-item value="multiplegauge">Multiple Gauge</mwc-list-item>
             <mwc-list-item value="pie">Pie</mwc-list-item>
           </ha-select>
           
