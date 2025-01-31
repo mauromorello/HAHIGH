@@ -1,4 +1,4 @@
-const version = "0.8.9"; //Tolto gauges
+const version = "0.9.1"; //Snippets!
 
 /********************************************************
  * Import LitElement libraries (version 2.4.0)
@@ -509,6 +509,104 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
     constructor() {
       super();
       this.activeTab = "series"; // Tab iniziale
+      
+      this._snippets = [
+            {
+              title: "Graph title (Graph)",
+              code: `
+title: {
+  useHTML: true
+  text: 'HAHIGH!<br><small style="opacity: 0.2;">My small graphic addiction</small>', 
+  floating: true, 
+  x: 20,   align: 'left', 
+  y: 30, verticalAlign: 'top', 
+  style: { fontSize: '24px', color: '#AAAAAA', fontWeight: 'bold' },
+  
+},`
+            },
+            {
+              
+              title: "Y Axis Options (Graph)",
+              code: `
+yAxis: {
+  title: { 
+    text: 'Axis title',
+  }, 
+  gridLineColor: "#CCC", 
+  gridLineDashStyle: 'longdash', 
+
+},`
+            },
+            {
+              title: "Opacity (Graph)",
+              code: `
+plotOptions: {
+  series: { 
+    fillOpacity: 0.1, 
+  }, 
+  
+},`
+            },
+            {
+              title: "VGradient colors (Entity)",
+              code: `
+fillColor: {
+  linearGradient: {x1: 0, y1: 0, x2: 0, y2: 1 }, 
+    stops: [
+      [0, 'red'],
+      [0.5, 'orange'], 
+      [1, 'green'],
+      
+    ], 
+  
+},`
+            },
+            {
+              title: "VGradient rgba (Entity)",
+              code: `
+fillColor:  {
+  linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
+  stops: [
+    [0, 'rgba(255,0,0,1)'],
+    [0.5, 'rgba(200,150,0,0.5)'],
+    [1, 'rgba(0,250,0,0)']
+         ],
+},`
+         
+            },
+            {
+              
+              title: "ABS Line VGradient rgba (Entity)",
+              code: `
+color:  {
+  linearGradient: [0,0,0,300],
+  stops: [
+      [0, 'rgba(255,0,0,1)'],
+      [0.5, 'rgba(200,150,0,0.5)'],
+      [1, 'rgba(0,250,0,0)']
+  ]
+},`
+            
+            },
+            {
+              
+              title: "Line Shadow (Entity)",
+              code: `
+shadow: {
+  color: 'rgba(0, 0, 0, 0.5)',
+  offsetX: 2,
+  offsetY: 2,
+  opacity: 0.5,
+  width: 5,
+},`
+            }
+            
+          ];
+    
+    
+    this._lastFocusedTextarea = null;  // Per salvare l'elemento della textarea
+    this._cursorPosition = null;       // Per salvare la posizione del cursore 
+    
     }
 
     setConfig(config) {
@@ -753,6 +851,55 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
 
           return true;
       }
+      
+    _openDialog(event) {
+      event.preventDefault();
+      this._showDialog = true;
+      this.requestUpdate();
+    }
+    
+    _closeDialog() {
+      this._showDialog = false;
+      this.requestUpdate();
+    }      
+
+  _copyToClipboard(index) {
+    const text = this._snippets[index]?.code;
+    
+    if (!text) {
+      console.error("Errore: testo da copiare non trovato.");
+      return;
+    }
+  
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        console.log("Contenuto copiato negli appunti!");
+        this._closeDialog();
+        this._restoreCursorPosition();  // 🔹 Ripristina il cursore dopo la copia
+      }).catch(err => {
+        console.error("Errore nella copia con Clipboard API:", err);
+      });
+  
+    } else {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand("copy");
+        console.log("Contenuto copiato (fallback).");
+        this._closeDialog();
+        this._restoreCursorPosition();  // 🔹 Ripristina il cursore dopo la copia
+      } catch (err) {
+        console.error("Errore nella copia con execCommand:", err);
+      }
+      document.body.removeChild(textarea);
+    }
+  }
+
+
+
+
 
     // THE BIG RENDER *******************************************************************************************
     render() {
@@ -760,6 +907,31 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
 
       return html`
         <div class="card-config">
+        
+          <!-- Dialog box -->
+            ${this._showDialog ? html`
+              <ha-dialog open @closed=${this._closeDialog}>
+                <h2 slot="heading">Helper Instructions</h2>
+                <div>
+                  <p>Qui puoi trovare degli snippet di codice di esempio:</p>
+            
+                  ${this._snippets.map((snippet, index) => html`
+                    <div style="margin-bottom: 5px; display: flex; align-items: center;">
+                      <!-- Icona copia -->
+                      <ha-icon
+                        icon="mdi:content-copy"
+                        title="Copia snippet"
+                        @click=${() => this._copyToClipboard(index)}
+                        style="cursor: pointer; margin-right: 5px; font-size: 18px; color: var(--primary-color);"
+                      ></ha-icon>
+                      <span style="font-size: 14px;">${snippet.title}</span>
+                    </div>
+                  `)}
+                </div>
+              </ha-dialog>
+            ` : ""}
+
+
         
           <div class="tabs">
             <mwc-button @click=${() => this.activeTab = "series"} ?raised=${this.activeTab === "series"}>Series</mwc-button>
@@ -878,6 +1050,13 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
                   <span class="mdc-notched-outline">
                     <span class="mdc-notched-outline__leading"></span>
                     <span class="mdc-floating-label">Highcharts CHART options <small><a href="https://api.highcharts.com/highcharts" TARGET="BLANK">API here</a></small></span>
+                      &nbsp;
+                      <a href="#" 
+                        @click=${(e) => this._openDialog(e)} 
+                        @mouseover=${this._saveCursorPosition} 
+                        style="cursor: pointer; text-decoration: underline; color: blue;">
+                        Helpers here
+                      </a>
                     <span class="mdc-notched-outline__trailing"></span>
                   </span>
                   <span class="mdc-text-field__resizer">
@@ -990,6 +1169,12 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
                         <span class="mdc-notched-outline">
                           <span class="mdc-notched-outline__leading"></span>
                           <span class="mdc-floating-label">Highcharts series options <small><a href="https://api.highcharts.com/highcharts/series" TARGET="BLANK">API here</a></small></span>
+                          &nbsp;
+                          <a href="#" 
+                            @click=${(e) => this._openDialog(e)} 
+                            style="cursor: pointer; text-decoration: underline; color: blue;">
+                            Helpers here
+                          </a>
                           <span class="mdc-notched-outline__trailing"></span>
                         </span>
                         <span class="mdc-text-field__resizer">
