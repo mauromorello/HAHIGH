@@ -1,4 +1,4 @@
-const version = "0.9.2"; //Themes!
+const version = "0.9.3"; //Clipboard copy into textarea!
 
 /********************************************************
  * Import LitElement libraries (version 2.4.0)
@@ -937,54 +937,125 @@ shadow: {
 
           return true;
       }
-      
+
+
+    //----------------------------------------------------------------------------------->
+    // CLIPBOARD COPY
+    //----------------------------------------------------------------------------------->
+    
     _openDialog(event) {
       event.preventDefault();
       this._showDialog = true;
       this.requestUpdate();
     }
     
+    // Modifica di _closeDialog per inserire il testo nell'ultima textarea
     _closeDialog() {
       this._showDialog = false;
       this.requestUpdate();
-    }      
-
-  _copyToClipboard(text) {
-
-    
-    if (!text) {
-      console.error("Errore: testo da copiare non trovato.");
-      return;
-    }
-  
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(() => {
-        console.log("Contenuto copiato negli appunti!");
-        this._closeDialog();
-      }).catch(err => {
-        console.error("Errore nella copia con Clipboard API:", err);
-      });
-  
-    } else {
-      const textarea = document.createElement("textarea");
-      textarea.value = text;
-      document.body.appendChild(textarea);
-      textarea.select();
-      try {
-        document.execCommand("copy");
-        console.log("Contenuto copiato (fallback).");
-        this._closeDialog();
-      } catch (err) {
-        console.error("Errore nella copia con execCommand:", err);
+      
+      if (this._lastFocusedTextarea && this._cursorPosition !== null && this._snippetTextToInsert) {
+        // Inserisce il testo salvato nella posizione del cursore
+        const currentValue = this._lastFocusedTextarea.value;
+        const newValue =
+          currentValue.slice(0, this._cursorPosition) +
+          this._snippetTextToInsert +
+          currentValue.slice(this._cursorPosition);
+        this._lastFocusedTextarea.value = newValue;
+        
+        // Innesca l'evento 'input' per aggiornare la configurazione, se necessario
+        this._lastFocusedTextarea.dispatchEvent(new Event('input'));
+        
+        // Aggiorna la posizione del cursore dopo l'inserimento (opzionale)
+        const newCursorPosition = this._cursorPosition + this._snippetTextToInsert.length;
+        this._cursorPosition = newCursorPosition;
+        this._lastFocusedTextarea.setSelectionRange(newCursorPosition, newCursorPosition);
+        
+        // Reset della variabile per evitare inserimenti successivi indesiderati
+        this._snippetTextToInsert = null;
       }
-      document.body.removeChild(textarea);
+    }    
+
+    // Modifica di _copyToClipboard per salvare il testo da inserire
+    _copyToClipboard(text) {
+      if (!text) {
+        console.error("Errore: testo da copiare non trovato.");
+        return;
+      }
+      
+      // Salva il testo da inserire nella textarea
+      this._snippetTextToInsert = text;
+    
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+          console.log("Contenuto copiato negli appunti!");
+          this._closeDialog();
+        }).catch(err => {
+          console.error("Errore nella copia con Clipboard API:", err);
+        });
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+          document.execCommand("copy");
+          console.log("Contenuto copiato (fallback).");
+          this._closeDialog();
+        } catch (err) {
+          console.error("Errore nella copia con execCommand:", err);
+        }
+        document.body.removeChild(textarea);
+      }
     }
-  }
 
 
+    firstUpdated() {
+      // Registra gli eventi per aggiornare la posizione del cursore nelle textarea
+      this.addEventListener("keyup", this._handleCursorUpdate);
+      this.addEventListener("click", this._handleCursorUpdate);
+      this.addEventListener("mouseup", this._handleCursorUpdate);
+      this.addEventListener("focusin", this._handleFocusIn);
+      console.log("FIRSTUPDATED:");
+    }
 
+    _handleCursorUpdate(e) {
+      // Recupera il percorso completo dell'evento
+      const path = e.composedPath ? e.composedPath() : [e.target];
+      const target = path[0];
+      
+      if (target && target.tagName && target.tagName.toLowerCase() === "textarea") {
+        this._lastFocusedTextarea = target;
+        this._cursorPosition = target.selectionStart;
+      }
+    }
 
+    _handleFocusIn(e) {
+      if (
+        e.target &&
+        e.target.tagName.toLowerCase() === "textarea" &&
+        this._lastFocusedTextarea === e.target &&
+        this._cursorPosition !== null
+      ) {
+        // Il timeout assicura che il focus sia completo prima di impostare la posizione
+        setTimeout(() => {
+          e.target.setSelectionRange(this._cursorPosition, this._cursorPosition);
+        }, 0);
+      }
+    }
+    
+    _saveCursorPosition(e) {
+      const activeElement = this.shadowRoot.activeElement;
+      if (activeElement && activeElement.tagName.toLowerCase() === "textarea") {
+        this._lastFocusedTextarea = activeElement;
+        this._cursorPosition = activeElement.selectionStart;
+        console.log("Position: ", this._cursorPosition );
+      }
+    }
 
+    //----------------------------------------------------------------------------------->
+    
+    
     // THE BIG RENDER *******************************************************************************************
     render() {
       if (!this._config) return html``;
@@ -1024,11 +1095,6 @@ shadow: {
           </ha-dialog>
         ` : ""}
 
-
-
-
-
-        
           <div class="tabs">
             <mwc-button @click=${() => this.activeTab = "series"} ?raised=${this.activeTab === "series"}>Series</mwc-button>
             <mwc-button @click=${() => this.activeTab = "chart"} ?raised=${this.activeTab === "chart"}>Chart</mwc-button>
@@ -1149,7 +1215,6 @@ shadow: {
                       &nbsp;
                       <a href="#" 
                         @click=${(e) => this._openDialog(e)} 
-                        @mouseover=${this._saveCursorPosition} 
                         style="cursor: pointer; text-decoration: underline; color: blue;">
                         Helpers here
                       </a>
