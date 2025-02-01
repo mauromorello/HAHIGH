@@ -1,4 +1,4 @@
-const version = "0.9.1"; //Snippets!
+const version = "0.9.2"; //Themes!
 
 /********************************************************
  * Import LitElement libraries (version 2.4.0)
@@ -512,21 +512,76 @@ class TimeseriesHighInfluxCardEditor extends LitElement {
       
       this._snippets = [
             {
-              title: "Graph title (Graph)",
+              title: "Chart title",
+              use: "chart:",
               code: `
 title: {
-  useHTML: true
+  useHTML: true,
   text: 'HAHIGH!<br><small style="opacity: 0.2;">My small graphic addiction</small>', 
   floating: true, 
   x: 20,   align: 'left', 
-  y: 30, verticalAlign: 'top', 
+  y: 30, verticalAlign: 'bottom', 
   style: { fontSize: '24px', color: '#AAAAAA', fontWeight: 'bold' },
   
 },`
             },
             {
               
-              title: "Y Axis Options (Graph)",
+              title: "Dark",
+              use: "chart themes:",
+              code: `
+chart: {
+        backgroundColor: '#2a2a2a',
+        plotBorderColor: '#606063',
+        plotBackgroundColor: '#2a2a2a',
+    },
+    title: {
+        useHTML: true,
+        text: 'Dark Theme',
+        floating: true,
+        x: 30, align:"left",
+        y: 20, verticalAlign:"top",
+        style: {color: '#CCC', fontSize: "24px", fontWeight: 'bold', },
+        
+    },
+    xAxis: {
+        gridLineColor: '#707073',
+        gridLineDashStyle: 'shortdash',
+        gridLineWidth: 1,
+        labels: {
+            style: {color: '#E0E0E0', }
+        },
+        title: {
+            style: {color: '#FFFFFF', }
+        }
+    },
+    yAxis: {
+        gridLineColor: '#707073',
+        alternateGridColor: '#222',
+        gridLineDashStyle: 'dot',
+        labels: {
+            style: { color: '#E0E0E0', }
+        },
+        title: {
+            style: {color: '#FFFFFF',  }
+        }
+    },
+`
+            },
+            {
+              
+              title: "Transparent Background",
+              use: "chart themes:",
+              code: `
+chart: {
+  backgroundColor: 'transparent', 
+},
+`
+            },
+            {
+              
+              title: "Y Axis Options (chart)",
+              use: "chart:",
               code: `
 yAxis: {
   title: { 
@@ -535,20 +590,39 @@ yAxis: {
   gridLineColor: "#CCC", 
   gridLineDashStyle: 'longdash', 
 
-},`
+},
+`
             },
             {
-              title: "Opacity (Graph)",
+              title: "Background",
+              use: "chart:",
+              code: `
+chart:{    
+  backgroundColor: {
+    linearGradient: [0, 0, 0, 300],
+      stops: [
+      [0, 'rgba(255, 255, 255,1)'],
+      [1, 'rgba(230, 230, 255,1)']
+      ],
+  },
+},
+`
+            },
+            {
+              title: "Opacity",
+              use: "chart:",
               code: `
 plotOptions: {
   series: { 
     fillOpacity: 0.1, 
   }, 
   
-},`
+},
+`
             },
             {
-              title: "VGradient colors (Entity)",
+              title: "VGradient colors",
+              use: "series:",
               code: `
 fillColor: {
   linearGradient: {x1: 0, y1: 0, x2: 0, y2: 1 }, 
@@ -559,10 +633,17 @@ fillColor: {
       
     ], 
   
-},`
+},
+`
             },
             {
-              title: "VGradient rgba (Entity)",
+              title: "Connect Nulls",
+              use: "series:",
+              code: `connectNulls: true,`
+            },
+            {
+              title: "VGradient rgba",
+              use: "series:",
               code: `
 fillColor:  {
   linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
@@ -571,12 +652,14 @@ fillColor:  {
     [0.5, 'rgba(200,150,0,0.5)'],
     [1, 'rgba(0,250,0,0)']
          ],
-},`
+},
+`
          
             },
             {
               
               title: "ABS Line VGradient rgba (Entity)",
+              use: "series:",
               code: `
 color:  {
   linearGradient: [0,0,0,300],
@@ -585,12 +668,14 @@ color:  {
       [0.5, 'rgba(200,150,0,0.5)'],
       [1, 'rgba(0,250,0,0)']
   ]
-},`
+},
+`
             
             },
             {
               
-              title: "Line Shadow (Entity)",
+              title: "Line Shadow",
+              use: "series:",
               code: `
 shadow: {
   color: 'rgba(0, 0, 0, 0.5)',
@@ -598,7 +683,8 @@ shadow: {
   offsetY: 2,
   opacity: 0.5,
   width: 5,
-},`
+},
+`
             }
             
           ];
@@ -863,8 +949,8 @@ shadow: {
       this.requestUpdate();
     }      
 
-  _copyToClipboard(index) {
-    const text = this._snippets[index]?.code;
+  _copyToClipboard(text) {
+
     
     if (!text) {
       console.error("Errore: testo da copiare non trovato.");
@@ -875,7 +961,6 @@ shadow: {
       navigator.clipboard.writeText(text).then(() => {
         console.log("Contenuto copiato negli appunti!");
         this._closeDialog();
-        this._restoreCursorPosition();  // 🔹 Ripristina il cursore dopo la copia
       }).catch(err => {
         console.error("Errore nella copia con Clipboard API:", err);
       });
@@ -889,7 +974,6 @@ shadow: {
         document.execCommand("copy");
         console.log("Contenuto copiato (fallback).");
         this._closeDialog();
-        this._restoreCursorPosition();  // 🔹 Ripristina il cursore dopo la copia
       } catch (err) {
         console.error("Errore nella copia con execCommand:", err);
       }
@@ -908,34 +992,46 @@ shadow: {
       return html`
         <div class="card-config">
         
-          <!-- Dialog box -->
-            ${this._showDialog ? html`
-              <ha-dialog open @closed=${this._closeDialog}>
-                <h2 slot="heading">Helper Instructions</h2>
-                <div>
-                  <p>Qui puoi trovare degli snippet di codice di esempio:</p>
-            
-                  ${this._snippets.map((snippet, index) => html`
-                    <div style="margin-bottom: 5px; display: flex; align-items: center;">
-                      <!-- Icona copia -->
-                      <ha-icon
-                        icon="mdi:content-copy"
-                        title="Copia snippet"
-                        @click=${() => this._copyToClipboard(index)}
-                        style="cursor: pointer; margin-right: 5px; font-size: 18px; color: var(--primary-color);"
-                      ></ha-icon>
-                      <span style="font-size: 14px;">${snippet.title}</span>
-                    </div>
-                  `)}
-                </div>
-              </ha-dialog>
-            ` : ""}
+        ${this._showDialog ? html`
+          <ha-dialog open @closed=${this._closeDialog}>
+            <h2 slot="heading">Helper Instructions</h2>
+            <div>
+              <p>Config snippets:</p>
+        
+              ${Object.entries(this._snippets.reduce((acc, snippet) => {
+                if (!acc[snippet.use]) {
+                  acc[snippet.use] = [];
+                }
+                acc[snippet.use].push(snippet);
+                return acc;
+              }, {})).map(([use, snippets]) => html`
+                <h3 style="margin-top: 10px; font-size: 16px; color: var(--primary-color);">${use}</h3>
+                ${snippets.map((snippet) => html`
+                  <div style="margin-bottom: 5px; display: flex; align-items: center;">
+                    <!-- Icona copia -->
+                    <ha-icon
+                      icon="mdi:content-copy"
+                      title="Copia snippet"
+                      @click=${() => this._copyToClipboard(snippet.code)}
+                      style="cursor: pointer; margin-right: 5px; font-size: 18px; color: var(--primary-color);"
+                    ></ha-icon>
+        
+                    <span style="font-size: 14px;">${snippet.title}</span>
+                  </div>
+                `)}
+              `)}
+            </div>
+          </ha-dialog>
+        ` : ""}
+
+
+
 
 
         
           <div class="tabs">
             <mwc-button @click=${() => this.activeTab = "series"} ?raised=${this.activeTab === "series"}>Series</mwc-button>
-            <mwc-button @click=${() => this.activeTab = "graph"} ?raised=${this.activeTab === "graph"}>Graph</mwc-button>
+            <mwc-button @click=${() => this.activeTab = "chart"} ?raised=${this.activeTab === "chart"}>Chart</mwc-button>
             <mwc-button @click=${() => this.activeTab = "config"} ?raised=${this.activeTab === "config"}>Config</mwc-button>
           </div>
 
@@ -969,7 +1065,7 @@ shadow: {
           </div>
   
           <!-- Chart type selection -->
-          <div class="section" style="display: ${this.activeTab === "graph" ? "block" : "none"};">
+          <div class="section" style="display: ${this.activeTab === "chart" ? "block" : "none"};">
                 
             <h4>Global chart options</h4>
             
