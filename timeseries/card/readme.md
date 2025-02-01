@@ -36,21 +36,6 @@ The custom card in this repository is named **`timeseries-highinflux-card`**, an
 
 ---
 
-## Supported Chart Types
-
-By default, `timeseries-highinflux-card` supports the following Highcharts [chart types](https://www.highcharts.com/docs/chart-and-series-types/):
-
-- **line**  
-- **spline**  
-- **area**  
-- **areaspline**  
-- **bar**  
-- **column**
-
-You can select one of these through the card’s `chart_type` parameter.
-
----
-
 ## How to Install
 
 1. **Download** or **copy** the `timeseries-highinflux-card.js` file from this repository.
@@ -80,6 +65,56 @@ frontend:
 ```
     
 You'll need to adjust that path according to where you have installed timeseries-highinflux-card.js. 
+
+
+## Configurable Properties
+
+### Global Configuration
+- **title**: The title displayed in the card header.
+- **influx_url**: The URL of the InfluxDB server.
+- **influx_db**: The name of the InfluxDB database.
+- **influx_user**: The username for accessing InfluxDB.
+- **influx_password**: The password for InfluxDB.
+- **update_interval**: The automatic update interval in seconds.
+
+### Global Chart Options
+- **chart_height**: The height of the chart (e.g., "300px").
+- **chart_type**: The type of chart. Valid options include **line**, **spline**, **area**, **areaspline**, **areastacked**, **areastackedpercent**, **bar**, and **column**.
+- **selector**: A boolean flag; when enabled, it activates Highcharts' selector (using stockChart).
+- **legend**: A boolean flag to show or hide the chart legend.
+- **max_y**: The maximum value for the Y-axis.
+- **chart_options**: Additional global options for Highcharts, provided as JSON or JavaScript code.
+
+### Per-Entity Configuration (Multiple Entities Mode)
+Each entity in the **entities** array can have its own settings:
+- **sensor**: The sensor identifier (e.g., "sensor.temperature").
+- **query**: The InfluxDB query to retrieve data for the entity.
+- **unita_misura**: The unit of measurement for the sensor (used in tooltips).
+- **name**: The display name for the series.
+- **color**: The color assigned to the series in the chart.
+- **options**: Specific Highcharts options for the series, provided as JSON or JavaScript code.
+
+## Card Capabilities
+
+- **Data Visualization**:  
+  The card queries InfluxDB and displays time-series data using Highcharts, offering dynamic and interactive charts.
+
+- **Automatic Updates**:  
+  The chart data refreshes automatically based on the configured update interval, ensuring that the information is always current.
+
+- **Multi-Entity Support**:  
+  Users can configure multiple entities, each with individual queries and options, or use a single-query configuration.
+
+- **Advanced Editor Interface**:  
+  The card’s configuration editor is organized into multiple tabs (e.g., **Database**, **Chart**, **Series/Config**) to simplify the setup of both global and per-entity settings.
+
+- **Snippet Helpers**:  
+  The editor includes a snippet helper feature.  
+  - **How It Works**: Clicking the copy icon on a snippet copies the code into the clipboard and automatically inserts it at the current cursor position in the active textarea.
+  - **Benefits**: This makes it easy to import small configuration snippets—such as chart themes, gradient settings, shadow options, and other advanced Highcharts configurations—directly into the card’s configuration.
+
+## Summary
+The **Timeseries High Influx Card** is designed for Home Assistant dashboards to display InfluxDB data with high flexibility and customization. It leverages Highcharts for robust charting capabilities and offers a wide range of configurable properties for both global settings and per-entity customization. The built-in snippet helper enhances the user experience by allowing quick insertion of pre-defined configuration snippets into textareas.
 
 
 ## Example Configuration
@@ -169,15 +204,12 @@ If the `color` property is left empty, Highcharts will automatically assign a de
 
 All chart configuration can be overwritten by these options. Please reter to highcharts "chart" options to understand the power of this config option.
 
-🔴 **Warning**: This feature is experimental. If you provide an incorrect JSON format or invalid options, the chart may fail to render.
-
 
 ## ⚙️ Advanced Series Options (options)
 [Higcharts series API](https://api.highcharts.com/highcharts/series)
 
 Each series in the chart supports an optional field called options, allowing customization of various aspects such as color, tooltip visibility, line type, and more.
 
-🔴 **Warning**: This feature is experimental. If you provide an incorrect JSON format or invalid options, the chart may fail to render.
 
 ### 📌 Configuration Example
 If you want to set the witdth to 5 pixels for the first series, use the following configuration in your YAML or UI editor:
