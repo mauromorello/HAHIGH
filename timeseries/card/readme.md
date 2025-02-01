@@ -4,11 +4,8 @@ Welcome to **[HAHIGH](https://github.com/mauromorello/HAHIGH)**! This project in
 
 
 <img src="https://github.com/user-attachments/assets/f27dad22-5ef5-4e24-8be6-5fd5fe578315" style="width:100%;">
-<img src="https://github.com/user-attachments/assets/7c474926-b53f-4116-8d6d-7d637bd28d05" style="width:200px;">
-<img src="https://github.com/user-attachments/assets/611f29bf-e261-47f5-a7e2-59f4a119d924" style="width:200px;">
-<img src="https://github.com/user-attachments/assets/1c6d9ff2-d86b-4f79-92cb-843e11388f74" style="width:200px;">
-<img src="https://github.com/user-attachments/assets/861fc8b5-001b-47c1-a5d9-525fde1efe48" style="width:200px;">
-
+<img src="https://github.com/user-attachments/assets/5691f9ce-ad91-4265-8b0c-40b7f9abc182" style="width:100%;">
+<img src="https://github.com/user-attachments/assets/bef1d6a4-2645-44ae-9f13-0ba303a7e1c7" style="width:100%;">
 
 ---
 
