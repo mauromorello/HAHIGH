@@ -1,4 +1,5 @@
-const version = "0.9.3"; //Clipboard copy into textarea!
+
+const version = "0.9.4"; //Logica di caricamento
 
 /********************************************************
  * Import LitElement libraries (version 2.4.0)
@@ -7,8 +8,46 @@ const version = "0.9.3"; //Clipboard copy into textarea!
  *******************************************************/
 import { html, css, LitElement } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
 
-// Variabile globale per evitare caricamenti multipli
-window._highchartsLoading = window._highchartsLoading || null;
+
+window.loadHighchartsUnified = function() {
+  if (window._highchartsUnifiedLoading) {
+    return window._highchartsUnifiedLoading;
+  }
+  window._highchartsUnifiedLoading = new Promise((resolve, reject) => {
+    const scripts = [
+      "https://code.highcharts.com/stock/highstock.js",
+      "https://code.highcharts.com/highcharts-more.js",
+      "https://code.highcharts.com/modules/solid-gauge.js"
+    ];
+    function loadNext(index) {
+      if (index >= scripts.length) {
+        console.log("Tutti i moduli Highcharts sono stati caricati in sequenza.");
+        resolve();
+        return;
+      }
+      const src = scripts[index];
+      if (document.querySelector(`script[src="${src}"]`)) {
+        // Se lo script è già presente, passa al successivo
+        loadNext(index + 1);
+        return;
+      }
+      const script = document.createElement("script");
+      // Impostando async a false si forza l'esecuzione in ordine
+      script.async = false;
+      script.src = src;
+      script.onload = () => {
+        console.log(`Caricato: ${src}`);
+        loadNext(index + 1);
+      };
+      script.onerror = () => {
+        reject(new Error(`Errore nel caricamento di ${src}`));
+      };
+      document.head.appendChild(script);
+    }
+    loadNext(0);
+  });
+  return window._highchartsUnifiedLoading;
+};
 
 
 /********************************************************
@@ -194,15 +233,16 @@ class TimeseriesHighInfluxCard extends LitElement {
    * is rendered for the first time. A good place to
    * load Highcharts and start the data update loop.
    */
-  firstUpdated() {
-    // Se non è già stato configurato, carica Highcharts
-    if (!this.setupComplete) {
-      this._loadHighcharts().then(() => {
-        this.setupComplete = true;
-        this._startAutoUpdate();
-      });
+  async firstUpdated() {
+    console.log("FIRST UPDATED");
+    try {
+      await window.loadHighchartsUnified();
+      console.log("CHIAMO INITCHART");
+      this.setupComplete = true;
+      this._startAutoUpdate();
+    } catch (error) {
+      console.error("Errore nel caricamento di Highcharts:", error);
     }
-  
   }
 
 
@@ -228,54 +268,6 @@ class TimeseriesHighInfluxCard extends LitElement {
     this._fetchData(); // immediate fetch
     this._timeoutId = setInterval(() => this._fetchData(), this.updateInterval * 1000);
   }
-
-  /**
-   * Loads the Highcharts script from a CDN (if not already loaded).
-   */
-
-  
-  async _loadHighcharts() {
-      return new Promise((resolve, reject) => {
-          // Se Highcharts è già caricato, risolvi subito
-          if (window.Highcharts) {
-              resolve();
-              return;
-          }
-  
-          // Se un altro script è in fase di caricamento, aspettiamo che finisca
-          if (window._highchartsLoading) {
-              window._highchartsLoading.then(resolve).catch(reject);
-              return;
-          }
-  
-          // Lista di script da caricare
-          // Se serve altro
-          const scripts = [
-
-              "https://code.highcharts.com/stock/highstock.js",
-
-          ];
-  
-          // Carica tutti gli script in parallelo
-          window._highchartsLoading = Promise.all(
-              scripts.map((src) => new Promise((scriptResolve, scriptReject) => {
-                  const script = document.createElement("script");
-                  script.src = src;
-                  script.async = true;
-                  script.onload = () => {
-                      scriptResolve();
-                  };
-                  script.onerror = () => {
-                      scriptReject();
-                  };
-                  document.head.appendChild(script);
-              }))
-          ).then(resolve).catch(reject);
-      });
-  }
-
-
-  
 
   /**
    * Main function to query InfluxDB, supporting either
