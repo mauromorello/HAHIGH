@@ -1,4 +1,4 @@
-const version = "0.2.5"; //Loading all in common
+const version = "0.2.6"; //Aggiunto standardgauge
 
 /********************************************************
  * Import LitElement libraries (version 2.4.0)
@@ -25,7 +25,7 @@ window.loadHighchartsUnified = function() {
     ];
     function loadNext(index) {
       if (index >= scripts.length) {
-        console.log("Tutti i moduli Highcharts sono stati caricati in sequenza.");
+        //console.log("Tutti i moduli Highcharts sono stati caricati in sequenza.");
         resolve();
         return;
       }
@@ -40,7 +40,7 @@ window.loadHighchartsUnified = function() {
       script.async = false;
       script.src = src;
       script.onload = () => {
-        console.log(`Caricato: ${src}`);
+        //console.log(`Caricato: ${src}`);
         loadNext(index + 1);
       };
       script.onerror = () => {
@@ -50,7 +50,9 @@ window.loadHighchartsUnified = function() {
     }
     loadNext(0);
   });
+  console.log("HAHIGH realtime v:" + version);
   return window._highchartsUnifiedLoading;
+
 };
 
 
@@ -205,10 +207,10 @@ class RealtimeHighHaCard extends LitElement {
   }
 
   async firstUpdated() {
-    console.log("FIRST UPDATED");
+    //console.log("FIRST UPDATED");
     try {
       await window.loadHighchartsUnified();
-      console.log("CHIAMO INITCHART");
+      //console.log("CHIAMO INITCHART");
       this._initChart();
     } catch (error) {
       console.error("Errore nel caricamento di Highcharts:", error);
@@ -216,7 +218,7 @@ class RealtimeHighHaCard extends LitElement {
   }
 
   async _initChart() {
-      console.log("INIT CHART");
+      //console.log("INIT CHART");
       //await this._loadHighcharts(true);
       this._renderChart([]);
       
@@ -288,8 +290,6 @@ class RealtimeHighHaCard extends LitElement {
           return;
       }
 
-
-
       if (chartType === "pie") {
           let pieData = [];
       
@@ -347,7 +347,7 @@ class RealtimeHighHaCard extends LitElement {
   
 
   
-          if (chartType === "solidgauge") {
+          if (chartType === "solidgauge" || chartType === "standardgauge") {
 
         
             if (this._chart.series[index]) {
@@ -360,7 +360,11 @@ class RealtimeHighHaCard extends LitElement {
                     this._chart.series[index].setData([val], true);
                 }
             } else {
-
+                  const newSeries = {
+                      name: ent.name || entityId,
+                      data: [{ y: val}],
+                      color: ent.color || Highcharts.getOptions().colors[index % Highcharts.getOptions().colors.length]
+                  };
                 this._chart.addSeries(newSeries, true);
             }
           } else {
@@ -550,7 +554,120 @@ class RealtimeHighHaCard extends LitElement {
               ];
           
               break;
+              
+          case "standardgauge":
+              options.chart = {
+                    type: 'gauge',
+                    plotBackgroundColor: null,
+                    plotBackgroundImage: null,
+                    plotBorderWidth: 0,
+                    plotShadow: false,
+                    height: '80%',
+                    events: {
+                        load: function () {
+                          const chartWidth = this.chartWidth;
+                          
+        
+                          
+                          // Nuovo calcolo della font-size con una scala più accentuata
+                          let fontSize;
+                          const maxSize = 42; // Font-size massimo
+                          const minSize = 16; // Font-size minimo
+                          const maxWidth = 486; // Larghezza in cui il font è massimo
+                          const minWidth = 238; // Larghezza in cui il font è minimo
+                    
+                          if (chartWidth >= maxWidth) {
+                            fontSize = maxSize;
+                          } else if (chartWidth <= minWidth) {
+                            fontSize = minSize;
+                          } else {
+                            // Calcolo con scala più accentuata
+                            fontSize = (chartWidth - minWidth) / (maxWidth - minWidth) * (maxSize - minSize) + minSize;
+                          }
+                    
+                          this.series[0].update({
+                            dataLabels: {
+                              style: {
+                                fontSize: `${fontSize}px`
+                              }
+                            }
+                          }, false);
+                          this.redraw();
+                        }
+                      }
+              };
+              
+              options.tooltip = { enabled: false };    
+              
+              options.pane = {
+                    startAngle: -90,
+                    endAngle: 89.9,
+                    background: null,
+                    center: ['50%', '75%'],
+                    size: '110%'
+              };
+              
+              let maxValueHelper;
+              maxValueHelper = this._config.chart?.max_value !== null? this._config.chart.max_value : 1000;
+              
+              options.yAxis = {
+                  min: 0,
+                  max: maxValueHelper,
+                    tickPixelInterval: 50,
+                    tickPosition: 'inside',
+                    tickColor: '#FFFFFF',
+                    tickLength: 20,
+                    tickWidth: 2,
+                    minorTickInterval: null,
+                    labels: {
+                        distance: 20,
+                        style: {
+                            fontSize: '14px'
+                        }
+                    },
+                    lineWidth: 0,
+                    plotBands: [{
+                        from: 0,
+                        to: (maxValueHelper / 3),
+                        color: '#55BF3B', // green
+                        thickness: 30,
+                        //borderRadius: '50%'
+                    }, {
+                        from: maxValueHelper - (maxValueHelper / 3),
+                        to: maxValueHelper,
+                        color: '#DF5353', // red
+                        thickness: 30,
+                        //borderRadius: '50%'
+                    }, {
+                        from: (maxValueHelper / 3),
+                        to: maxValueHelper - (maxValueHelper / 3),
+                        color: '#DDDF0D', // yellow
+                        thickness: 30
+                    }]
+              };
 
+              options.series = [{
+                    data: [0],
+                    name: null,
+                    dataLabels: {
+                        y: -60,
+                        borderWidth: 0,
+                    },
+                    dial: {
+                        radius: '80%',
+                        backgroundColor: 'gray',
+                        baseWidth: 12,
+                        baseLength: '0%',
+                        rearLength: '0%'
+                    },
+                    pivot: {
+                        backgroundColor: 'gray',
+                        radius: 6
+                    }
+            
+                }];
+          
+              break;
   
           case "pie":
               options.chart = { type: "pie" };
@@ -584,7 +701,8 @@ class RealtimeHighHaCard extends LitElement {
           "barstacked": "bar",
           "columnstacked": "column",
           "pie": "pie", 
-          "solidgauge": "solidgauge"  
+          "solidgauge": "solidgauge",
+          "standardgauge": "standardgauge" 
       };
   
       return chartTypeMap[chartType] || chartType;
@@ -623,13 +741,15 @@ class RealtimeHighHaCard extends LitElement {
   
       // Creazione delle serie dati
       const seriesData = this._config.entity.map(ent => {
+          
           let extraOptions = {};
+          
           if (ent.options && typeof ent.options === "string") {
               try {
                   const func = new Function("Highcharts", "return " + ent.options);
                   extraOptions = func(window.Highcharts);
               } catch (e) {
-                  console.error(`❌ Errore nelle opzioni della serie ${ent.entity}:`, e);
+                  console.error(`Errore nelle opzioni della serie ${ent.entity}:`, e);
                   extraOptions = {};
               }
           }
@@ -651,7 +771,29 @@ class RealtimeHighHaCard extends LitElement {
                   }
               }, extraOptions);
           }
-      
+          
+          // 🔥 Se il grafico è standardgauge, impostiamo una serie specifica          
+          if (this._config.chart?.type === "standardgauge") {
+              
+              return Highcharts.merge({
+                    data: [0],
+                    name: ent.name || ent.entity,
+                    dataLabels: {
+                      format: `
+                          <div style="text-align:center">
+                              <span>{y:.0f}</span>&nbsp;<small style="color: #888888; font-size: 16px;">${ent.uMeasure !== undefined ? ent.uMeasure : ""}</small>
+                          </div>
+                      `,
+                        useHTML: true,
+                        borderWidth: 0,
+                        color: ent.color || undefined,
+                        style: {
+                            fontSize: '16px'
+                        }
+                    }
+                }, extraOptions);
+          }
+          
           // Per tutti gli altri tipi di grafico, usiamo la configurazione standard
           return Highcharts.merge({
               name: ent.name || ent.entity,
@@ -670,6 +812,7 @@ class RealtimeHighHaCard extends LitElement {
   
       // Creiamo il grafico
       this._chart = Highcharts.chart(container, finalOptions);
+      console.log("FINAL", finalOptions);
 
   }
 
@@ -1038,6 +1181,7 @@ class RealtimeHighHaCardEditor extends LitElement {
             <mwc-list-item value="areaspline">Area Spline</mwc-list-item>
             <mwc-list-item value="solidgauge">Solid Gauge</mwc-list-item>
             <mwc-list-item value="multiplegauge">Multiple Gauge</mwc-list-item>
+            <mwc-list-item value="standardgauge">Standard Gauge</mwc-list-item>
             <mwc-list-item value="pie">Pie</mwc-list-item>
           </ha-select>
           
