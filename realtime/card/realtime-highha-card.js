@@ -1,4 +1,4 @@
-const version = "0.2.6"; //Aggiunto standardgauge
+const version = "0.2.7"; //Aggiunto Helper
 
 /********************************************************
  * Import LitElement libraries (version 2.4.0)
@@ -871,6 +871,189 @@ class RealtimeHighHaCardEditor extends LitElement {
     super();
     this.activeTab = "entities";
     this._config = {};
+    
+          this._snippets = [
+            {
+              title: "Chart title",
+              use: "chart:",
+              code: `
+            title: {
+              useHTML: true,
+              text: 'HAHIGH!<br><small style="opacity: 0.2;">My small graphic addiction</small>', 
+              floating: true, 
+              x: 20,   align: 'left', 
+              y: 30, verticalAlign: 'bottom', 
+              style: { fontSize: '24px', color: '#AAAAAA', fontWeight: 'bold' },
+              
+            },`
+                        },
+                        {
+                          
+                          title: "Dark",
+                          use: "chart themes:",
+                          code: `
+            chart: {
+                    backgroundColor: '#2a2a2a',
+                    plotBorderColor: '#606063',
+                    plotBackgroundColor: '#2a2a2a',
+                },
+                title: {
+                    useHTML: true,
+                    text: 'Dark Theme',
+                    floating: true,
+                    x: 30, align:"left",
+                    y: 20, verticalAlign:"top",
+                    style: {color: '#CCC', fontSize: "24px", fontWeight: 'bold', },
+                    
+                },
+                xAxis: {
+                    gridLineColor: '#707073',
+                    gridLineDashStyle: 'shortdash',
+                    gridLineWidth: 1,
+                    labels: {
+                        style: {color: '#E0E0E0', }
+                    },
+                    title: {
+                        style: {color: '#FFFFFF', }
+                    }
+                },
+                yAxis: {
+                    gridLineColor: '#707073',
+                    alternateGridColor: '#222',
+                    gridLineDashStyle: 'dot',
+                    labels: {
+                        style: { color: '#E0E0E0', }
+                    },
+                    title: {
+                        style: {color: '#FFFFFF',  }
+                    }
+                },
+            `
+                        },
+                        {
+                          
+                          title: "Transparent Background",
+                          use: "chart themes:",
+                          code: `
+            chart: {
+              backgroundColor: 'transparent', 
+            },
+            `
+                        },
+                        {
+                          
+                          title: "Y Axis Options (chart)",
+                          use: "chart:",
+                          code: `
+            yAxis: {
+              title: { 
+                text: 'Axis title',
+              }, 
+              gridLineColor: "#CCC", 
+              gridLineDashStyle: 'longdash', 
+            
+            },
+            `
+                        },
+                        {
+                          title: "Background",
+                          use: "chart:",
+                          code: `
+            chart:{    
+              backgroundColor: {
+                linearGradient: [0, 0, 0, 300],
+                  stops: [
+                  [0, 'rgba(255, 255, 255,1)'],
+                  [1, 'rgba(230, 230, 255,1)']
+                  ],
+              },
+            },
+            `
+                        },
+                        {
+                          title: "Opacity",
+                          use: "chart:",
+                          code: `
+            plotOptions: {
+              series: { 
+                fillOpacity: 0.1, 
+              }, 
+              
+            },
+            `
+                        },
+                        {
+                          title: "VGradient colors",
+                          use: "series:",
+                          code: `
+            fillColor: {
+              linearGradient: {x1: 0, y1: 0, x2: 0, y2: 1 }, 
+                stops: [
+                  [0, 'red'],
+                  [0.5, 'orange'], 
+                  [1, 'green'],
+                  
+                ], 
+              
+            },
+            `
+                        },
+                        {
+                          title: "Connect Nulls",
+                          use: "series:",
+                          code: `connectNulls: true,`
+                        },
+                        {
+                          title: "VGradient rgba",
+                          use: "series:",
+                          code: `
+            fillColor:  {
+              linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
+              stops: [
+                [0, 'rgba(255,0,0,1)'],
+                [0.5, 'rgba(200,150,0,0.5)'],
+                [1, 'rgba(0,250,0,0)']
+                     ],
+            },
+            `
+                     
+                        },
+                        {
+                          
+                          title: "ABS Line VGradient rgba (Entity)",
+                          use: "series:",
+                          code: `
+            color:  {
+              linearGradient: [0,0,0,300],
+              stops: [
+                  [0, 'rgba(255,0,0,1)'],
+                  [0.5, 'rgba(200,150,0,0.5)'],
+                  [1, 'rgba(0,250,0,0)']
+              ]
+            },
+            `
+                        
+                        },
+                        {
+                          
+                          title: "Line Shadow",
+                          use: "series:",
+                          code: `
+            shadow: {
+              color: 'rgba(0, 0, 0, 0.5)',
+              offsetX: 2,
+              offsetY: 2,
+              opacity: 0.5,
+              width: 5,
+            },
+            `
+                        }
+                        
+                      ];
+    
+    
+    this._lastFocusedTextarea = null;  // Per salvare l'elemento della textarea
+    this._cursorPosition = null;       // Per salvare la posizione del cursore 
   }
 
   setConfig(config) {
@@ -1044,6 +1227,122 @@ class RealtimeHighHaCardEditor extends LitElement {
 
         return true;
     }  
+    
+    //----------------------------------------------------------------------------------->
+    // CLIPBOARD COPY
+    //----------------------------------------------------------------------------------->
+    
+    _openDialog(event) {
+      event.preventDefault();
+      this._showDialog = true;
+      this.requestUpdate();
+    }
+    
+    // Modifica di _closeDialog per inserire il testo nell'ultima textarea
+    _closeDialog() {
+      this._showDialog = false;
+      this.requestUpdate();
+      
+      if (this._lastFocusedTextarea && this._cursorPosition !== null && this._snippetTextToInsert) {
+        // Inserisce il testo salvato nella posizione del cursore
+        const currentValue = this._lastFocusedTextarea.value;
+        const newValue =
+          currentValue.slice(0, this._cursorPosition) +
+          this._snippetTextToInsert +
+          currentValue.slice(this._cursorPosition);
+        this._lastFocusedTextarea.value = newValue;
+        
+        // Innesca l'evento 'input' per aggiornare la configurazione, se necessario
+        this._lastFocusedTextarea.dispatchEvent(new Event('input'));
+        
+        // Aggiorna la posizione del cursore dopo l'inserimento (opzionale)
+        const newCursorPosition = this._cursorPosition + this._snippetTextToInsert.length;
+        this._cursorPosition = newCursorPosition;
+        this._lastFocusedTextarea.setSelectionRange(newCursorPosition, newCursorPosition);
+        
+        // Reset della variabile per evitare inserimenti successivi indesiderati
+        this._snippetTextToInsert = null;
+      }
+    }    
+
+    // Modifica di _copyToClipboard per salvare il testo da inserire
+    _copyToClipboard(text) {
+      if (!text) {
+        console.error("Errore: testo da copiare non trovato.");
+        return;
+      }
+      
+      // Salva il testo da inserire nella textarea
+      this._snippetTextToInsert = text;
+    
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+          console.log("Contenuto copiato negli appunti!");
+          this._closeDialog();
+        }).catch(err => {
+          console.error("Errore nella copia con Clipboard API:", err);
+        });
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+          document.execCommand("copy");
+          console.log("Contenuto copiato (fallback).");
+          this._closeDialog();
+        } catch (err) {
+          console.error("Errore nella copia con execCommand:", err);
+        }
+        document.body.removeChild(textarea);
+      }
+    }
+
+
+    firstUpdated() {
+      // Registra gli eventi per aggiornare la posizione del cursore nelle textarea
+      this.addEventListener("keyup", this._handleCursorUpdate);
+      this.addEventListener("click", this._handleCursorUpdate);
+      this.addEventListener("mouseup", this._handleCursorUpdate);
+      this.addEventListener("focusin", this._handleFocusIn);
+      console.log("FIRSTUPDATED:");
+    }
+
+    _handleCursorUpdate(e) {
+      // Recupera il percorso completo dell'evento
+      const path = e.composedPath ? e.composedPath() : [e.target];
+      const target = path[0];
+      
+      if (target && target.tagName && target.tagName.toLowerCase() === "textarea") {
+        this._lastFocusedTextarea = target;
+        this._cursorPosition = target.selectionStart;
+      }
+    }
+
+    _handleFocusIn(e) {
+      if (
+        e.target &&
+        e.target.tagName.toLowerCase() === "textarea" &&
+        this._lastFocusedTextarea === e.target &&
+        this._cursorPosition !== null
+      ) {
+        // Il timeout assicura che il focus sia completo prima di impostare la posizione
+        setTimeout(() => {
+          e.target.setSelectionRange(this._cursorPosition, this._cursorPosition);
+        }, 0);
+      }
+    }
+    
+    _saveCursorPosition(e) {
+      const activeElement = this.shadowRoot.activeElement;
+      if (activeElement && activeElement.tagName.toLowerCase() === "textarea") {
+        this._lastFocusedTextarea = activeElement;
+        this._cursorPosition = activeElement.selectionStart;
+        console.log("Position: ", this._cursorPosition );
+      }
+    }
+
+    //----------------------------------------------------------------------------------->    
 
   render() {
     if (!this._config) return html``;
@@ -1054,6 +1353,42 @@ class RealtimeHighHaCardEditor extends LitElement {
 
     return html`
       <div class="card-config">
+      
+        ${this._showDialog ? html`
+          <ha-dialog open @closed=${this._closeDialog}>
+            <h2 slot="heading">Helper Instructions</h2>
+            <div>
+              <p>Config snippets:</p>
+        
+              ${Object.entries(this._snippets.reduce((acc, snippet) => {
+                if (!acc[snippet.use]) {
+                  acc[snippet.use] = [];
+                }
+                acc[snippet.use].push(snippet);
+                return acc;
+              }, {})).map(([use, snippets]) => html`
+                <h3 style="margin-top: 10px; font-size: 16px; color: var(--primary-color);">${use}</h3>
+                ${snippets.map((snippet) => html`
+                  <div style="margin-bottom: 5px; display: flex; align-items: center;">
+                    <!-- Icona copia -->
+                    <ha-icon
+                      icon="mdi:content-copy"
+                      title="Copia snippet"
+                      @click=${() => this._copyToClipboard(snippet.code)}
+                      style="cursor: pointer; margin-right: 5px; font-size: 18px; color: var(--primary-color);"
+                    ></ha-icon>
+        
+                    <span style="font-size: 14px;">${snippet.title}</span>
+                  </div>
+                `)}
+              `)}
+            </div>
+          </ha-dialog>
+        ` : ""}
+      
+      
+      
+      
         <div class="tabs">
           <mwc-button @click=${() => (this.activeTab = "entities")} ?raised=${this.activeTab === "entities"}>Entities</mwc-button>
           <mwc-button @click=${() => (this.activeTab = "chart")} ?raised=${this.activeTab === "chart"}>Chart</mwc-button>
@@ -1124,13 +1459,17 @@ class RealtimeHighHaCardEditor extends LitElement {
 
                     <div style="display:${ent.isEntityOptionsVisible ? `block` : `none`};">
                         <label class="mdc-text-field mdc-text-field--outlined mdc-text-field--textarea">
-                            <span class="mdc-notched-outline">
+                              <span class="mdc-notched-outline">
                                 <span class="mdc-notched-outline__leading"></span>
-                                <span class="mdc-floating-label">Highcharts series options 
-                                    <small><a href="https://api.highcharts.com/highcharts/series" target="_blank">API here</a></small>
-                                </span>
+                                <span class="mdc-floating-label">Highcharts CHART options <small><a href="https://api.highcharts.com/highcharts" TARGET="BLANK">API here</a></small></span>
+                                  &nbsp;
+                                  <a href="#" 
+                                    @click=${(e) => this._openDialog(e)} 
+                                    style="cursor: pointer; text-decoration: underline; color: blue;">
+                                    Helpers here
+                                  </a>
                                 <span class="mdc-notched-outline__trailing"></span>
-                            </span>
+                              </span>
                             <span class="mdc-text-field__resizer">
                                 <textarea
                                     class="mdc-text-field__input"
@@ -1227,13 +1566,17 @@ class RealtimeHighHaCardEditor extends LitElement {
       <div class="section"  style="display:${this.activeTab === "advanced" ? "block" : "none"};">
           <h4>Advanced Highcharts Config</h4>
           <label class="mdc-text-field mdc-text-field--outlined mdc-text-field--textarea">
-              <span class="mdc-notched-outline">
-                  <span class="mdc-notched-outline__leading"></span>
-                  <span class="mdc-floating-label">Highcharts series options 
-                      <small><a href="https://api.highcharts.com/highcharts/series" target="_blank">API here</a></small>
+                  <span class="mdc-notched-outline">
+                    <span class="mdc-notched-outline__leading"></span>
+                    <span class="mdc-floating-label">Highcharts CHART options <small><a href="https://api.highcharts.com/highcharts" TARGET="BLANK">API here</a></small></span>
+                      &nbsp;
+                      <a href="#" 
+                        @click=${(e) => this._openDialog(e)} 
+                        style="cursor: pointer; text-decoration: underline; color: blue;">
+                        Helpers here
+                      </a>
+                    <span class="mdc-notched-outline__trailing"></span>
                   </span>
-                  <span class="mdc-notched-outline__trailing"></span>
-              </span>
               <span class="mdc-text-field__resizer">
                   <textarea
                       class="mdc-text-field__input"
@@ -1255,7 +1598,7 @@ class RealtimeHighHaCardEditor extends LitElement {
 
 
 
-    static get styles() {
+  static get styles() {
       return css`
         .card-config {
           display: flex;
