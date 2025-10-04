@@ -1412,6 +1412,37 @@ shadow: {
           min-height: 40px;
           display: block;
         }
+        
+        .tabs {
+          display: flex;
+          justify-content: space-around;
+          gap: 8px;
+          margin: 8px 0 12px 0;
+          background: var(--card-background-color);
+          padding: 6px;
+          border-radius: 10px;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+        }
+        
+        .tabs mwc-button {
+          flex: 1;
+          font-weight: 500;
+          text-transform: none;
+          border-radius: 8px;
+          transition: all 0.2s ease-in-out;
+          padding: 4px 4px 4px 12px;
+          cursor: pointer;
+        }
+        
+        .tabs mwc-button[raised] {
+          background: var(--primary-color);
+          color: var(--text-primary-color);
+          box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .tabs mwc-button:not([raised]):hover {
+          background: rgba(var(--rgb-primary-color), 0.08);
+        }
         `;  // ✅ Corretta chiusura del template literal con backtick
     }
 }
